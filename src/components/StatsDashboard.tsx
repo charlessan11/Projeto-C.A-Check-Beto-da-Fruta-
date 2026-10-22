@@ -27,12 +27,17 @@ import {
   Filter,
   BarChart3,
   Info,
+  FileDown,
 } from 'lucide-react';
-import { Task, User, CategoriaTarefa } from '../types';
+import { Task, User, CategoriaTarefa, StoreSettings, DailyRoutine } from '../types';
+import { generatePerformanceReportPDF } from '../services/pdfReportGenerator';
 
 interface StatsDashboardProps {
   tasks: Task[];
   users: User[];
+  currentUser?: User | null;
+  settings?: StoreSettings;
+  routine?: DailyRoutine | null;
 }
 
 // Vibrant, accessible palette matching the hortifrúti theme
@@ -48,9 +53,16 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const GTD_COLORS = ['#059669', '#f59e0b']; // Macro (Emerald) vs 2-Min (Amber)
 
-export const StatsDashboard: React.FC<StatsDashboardProps> = ({ tasks, users }) => {
+export const StatsDashboard: React.FC<StatsDashboardProps> = ({
+  tasks,
+  users,
+  currentUser,
+  settings,
+  routine,
+}) => {
   const [period, setPeriod] = useState<'mes_atual' | '30_dias' | 'tudo'>('mes_atual');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('todos');
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   const usersMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -235,6 +247,57 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ tasks, users }) 
     return [...userCompletionData].sort((a, b) => b.totalConcluidas - a.totalConcluidas)[0];
   }, [userCompletionData]);
 
+  const handleExportPDF = () => {
+    try {
+      setIsExportingPDF(true);
+      const periodLabels: Record<string, string> = {
+        mes_atual: 'Mês Atual',
+        '30_dias': 'Últimos 30 Dias',
+        tudo: 'Histórico Total',
+      };
+
+      const targetGoal = period === 'mes_atual' ? 10 : period === '30_dias' ? 12 : 15;
+
+      const employeeStats = userCompletionData.map((emp) => {
+        const pctMeta = Math.min(100, Math.round((emp.totalConcluidas / targetGoal) * 100));
+        return {
+          id: emp.id,
+          nomeCompleto: emp.nomeCompleto,
+          setor: emp.setor,
+          totalConcluidas: emp.totalConcluidas,
+          macroConcluidas: emp.macroConcluidas,
+          twoMinConcluidas: emp.twoMinConcluidas,
+          mediaGeralMin: emp.mediaGeralMin,
+          metaAtingida: emp.totalConcluidas >= targetGoal,
+          pctMeta,
+        };
+      });
+
+      generatePerformanceReportPDF({
+        periodLabel: periodLabels[period] || 'Mês Atual',
+        generatedBy: currentUser ? `${currentUser.nome} (${currentUser.perfil})` : 'Administrador',
+        storeName: settings?.nomeLoja || 'Hortifrúti Beto da Fruta',
+        gerenteResponsavel: settings?.gerenteResponsavel || 'Charles / Gerência',
+        kpis: {
+          storeAvgMacro: storeAvgMacroMinutes,
+          storeAvgTwoMin: storeAvgTwoMin,
+          totalTasksCount: tasks.length,
+          completedTasksCount: completedTasks.length,
+          completionRate: tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 100,
+          gtdAdherenceRate,
+          topPerformerName: topPerformer?.nomeCompleto || 'Equipe Geral',
+        },
+        employeeStats,
+        categoryStats: categoryDistributionData,
+        routine: routine || null,
+      });
+    } catch (err) {
+      console.error('Erro ao gerar relatório PDF:', err);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -253,37 +316,52 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ tasks, users }) 
             </p>
           </div>
 
-          {/* Period Selector Controls */}
-          <div className="flex items-center gap-2 bg-emerald-950/60 p-1.5 rounded-xl border border-emerald-700/50 text-xs self-start md:self-auto">
+          {/* Action & Filter Controls */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {/* Period Selector Controls */}
+            <div className="flex items-center gap-1 bg-emerald-950/60 p-1 rounded-xl border border-emerald-700/50 text-xs">
+              <button
+                onClick={() => setPeriod('mes_atual')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  period === 'mes_atual'
+                    ? 'bg-emerald-500 text-white shadow-xs'
+                    : 'text-emerald-200 hover:text-white'
+                }`}
+              >
+                Mês Atual
+              </button>
+              <button
+                onClick={() => setPeriod('30_dias')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  period === '30_dias'
+                    ? 'bg-emerald-500 text-white shadow-xs'
+                    : 'text-emerald-200 hover:text-white'
+                }`}
+              >
+                Últimos 30 dias
+              </button>
+              <button
+                onClick={() => setPeriod('tudo')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  period === 'tudo'
+                    ? 'bg-emerald-500 text-white shadow-xs'
+                    : 'text-emerald-200 hover:text-white'
+                }`}
+              >
+                Histórico Total
+              </button>
+            </div>
+
+            {/* Export PDF Report Button */}
             <button
-              onClick={() => setPeriod('mes_atual')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                period === 'mes_atual'
-                  ? 'bg-emerald-500 text-white shadow-xs'
-                  : 'text-emerald-200 hover:text-white'
-              }`}
+              onClick={handleExportPDF}
+              disabled={isExportingPDF}
+              type="button"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-emerald-950 hover:bg-emerald-50 border border-emerald-200 shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-75"
+              title="Gerar e baixar resumo executivo impresso em PDF com atividades concluídas e metas atingidas"
             >
-              Mês Atual
-            </button>
-            <button
-              onClick={() => setPeriod('30_dias')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                period === '30_dias'
-                  ? 'bg-emerald-500 text-white shadow-xs'
-                  : 'text-emerald-200 hover:text-white'
-              }`}
-            >
-              Últimos 30 dias
-            </button>
-            <button
-              onClick={() => setPeriod('tudo')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                period === 'tudo'
-                  ? 'bg-emerald-500 text-white shadow-xs'
-                  : 'text-emerald-200 hover:text-white'
-              }`}
-            >
-              Histórico Total
+              <FileDown className="w-4 h-4 text-emerald-700" />
+              <span>{isExportingPDF ? 'Gerando Relatório...' : 'Exportar Relatório PDF'}</span>
             </button>
           </div>
         </div>

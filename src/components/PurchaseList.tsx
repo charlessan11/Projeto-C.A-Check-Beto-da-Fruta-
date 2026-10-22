@@ -4,8 +4,6 @@ import {
   ShoppingBag,
   CheckCircle2,
   Clock,
-  CheckSquare,
-  Square,
   Search,
   Calendar,
   Sparkles,
@@ -14,8 +12,25 @@ import {
   ArrowRight,
   PackageCheck,
   Package,
+  Printer,
+  MessageCircle,
+  Truck,
+  Layers,
+  AlertCircle,
+  Check,
+  UserCheck,
+  AlertTriangle,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  ChevronRight,
+  Eye,
+  Store,
+  X,
 } from 'lucide-react';
-import { PurchaseItem, User } from '../types';
+import { PurchaseItem, User, StoreSettings, PurchaseStatusConferencia } from '../types';
+import { PurchaseWhatsAppModal } from './PurchaseWhatsAppModal';
+import { PurchasePrintModal } from './PurchasePrintModal';
 
 interface PurchaseListProps {
   purchases: PurchaseItem[];
@@ -25,6 +40,9 @@ interface PurchaseListProps {
   onDeletePurchase: (itemId: string) => void;
   onToggleRecebida: (itemId: string, currentState: boolean) => void;
   onToggleReposicao: (itemId: string, currentState: boolean) => void;
+  settings?: StoreSettings;
+  onUpdatePurchase?: (item: PurchaseItem) => void;
+  onSavePurchases?: (items: PurchaseItem[]) => void;
 }
 
 export const PurchaseList: React.FC<PurchaseListProps> = ({
@@ -35,262 +53,1075 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
   onDeletePurchase,
   onToggleRecebida,
   onToggleReposicao,
+  settings = {
+    nomeLoja: 'Beto da Fruta',
+    gerenteResponsavel: 'Charles',
+    proprietario: 'Beto',
+    horarioCheckinMatinal: '08:00',
+    checkinAtivo: true,
+  },
+  onUpdatePurchase,
+  onSavePurchases,
 }) => {
   const isAdmin = currentUser.perfil === 'Administrador';
-  const [search, setSearch] = useState('');
-  const [filterStage, setFilterStage] = useState<'todos' | 'pendente_chegada' | 'aguardando_banca' | 'concluido'>('todos');
 
+  // Sub-tabs of the Purchase Sector
+  const [activeSubTab, setActiveSubTab] = useState<'compras' | 'conferencia' | 'reposicao' | 'todos'>('compras');
+
+  // Search & Filters
+  const [search, setSearch] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('todos');
+  const [reposicaoSubFilter, setReposicaoSubFilter] = useState<'falta_repor' | 'reposto' | 'todos'>('falta_repor');
+
+  // Active checker for Conference tab (Lucas or Rafael)
+  const [activeChecker, setActiveChecker] = useState<'Lucas' | 'Rafael'>(
+    currentUser.nome.includes('Rafael') ? 'Rafael' : 'Lucas'
+  );
+
+  // Modals for WhatsApp and Printing
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // Modal to record custom conference details (difference reason)
+  const [editingConferenceItem, setEditingConferenceItem] = useState<PurchaseItem | null>(null);
+  const [confRecebidaInput, setConfRecebidaInput] = useState('');
+  const [confDivergenciaInput, setConfDivergenciaInput] = useState('');
+
+  // Reposicao detail modal
+  const [editingReposicaoItem, setEditingReposicaoItem] = useState<PurchaseItem | null>(null);
+  const [reposicaoObsInput, setReposicaoObsInput] = useState('');
+
+  // Suppliers list
+  const suppliers = useMemo(() => {
+    const set = new Set<string>();
+    purchases.forEach((p) => {
+      if (p.fornecedor && p.fornecedor.trim()) {
+        set.add(p.fornecedor.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [purchases]);
+
+  // General counts
+  const totalPurchases = purchases.length;
+  const aguardandoChegadaCount = purchases.filter((p) => !p.mercadoriaRecebida).length;
+  const recebidosNaLojaCount = purchases.filter((p) => p.mercadoriaRecebida).length;
+  const faltaReporCount = purchases.filter((p) => p.mercadoriaRecebida && !p.reposicaoConcluida).length;
+  const reposicaoConcluidaCount = purchases.filter((p) => p.reposicaoConcluida).length;
+
+  // Filtered items based on active subtab, supplier, search
   const filteredItems = useMemo(() => {
     return purchases.filter((item) => {
-      if (filterStage === 'pendente_chegada' && item.mercadoriaRecebida) return false;
-      if (filterStage === 'aguardando_banca' && (!item.mercadoriaRecebida || item.reposicaoConcluida)) return false;
-      if (filterStage === 'concluido' && !item.reposicaoConcluida) return false;
+      // Sub-tab filtering
+      if (activeSubTab === 'compras') {
+        // Show items in the purchase phase or all
+      } else if (activeSubTab === 'conferencia') {
+        // Items to check / compare
+      } else if (activeSubTab === 'reposicao') {
+        // Only items that have arrived in store
+        if (!item.mercadoriaRecebida) return false;
+        if (reposicaoSubFilter === 'falta_repor' && item.reposicaoConcluida) return false;
+        if (reposicaoSubFilter === 'reposto' && !item.reposicaoConcluida) return false;
+      }
 
+      // Supplier filter
+      if (supplierFilter !== 'todos' && item.fornecedor?.trim() !== supplierFilter) {
+        return false;
+      }
+
+      // Text Search
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchesProduct = item.produto.toLowerCase().includes(q);
-        const matchesSolicitante = item.solicitadoPorNome.toLowerCase().includes(q);
+        const matchesSupplier = item.fornecedor?.toLowerCase().includes(q);
+        const matchesSol = item.solicitadoPorNome.toLowerCase().includes(q);
+        const matchesChecker = item.conferidoPorNome?.toLowerCase().includes(q);
         const matchesObs = item.observacao?.toLowerCase().includes(q);
-        if (!matchesProduct && !matchesSolicitante && !matchesObs) return false;
+        if (!matchesProduct && !matchesSupplier && !matchesSol && !matchesChecker && !matchesObs) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [purchases, filterStage, search]);
+  }, [purchases, activeSubTab, supplierFilter, search, reposicaoSubFilter]);
 
-  const pendentesChegadaCount = purchases.filter((p) => !p.mercadoriaRecebida).length;
-  const aguardandoBancaCount = purchases.filter((p) => p.mercadoriaRecebida && !p.reposicaoConcluida).length;
-  const concluidasCount = purchases.filter((p) => p.reposicaoConcluida).length;
+  // Update a single purchase item
+  const updateItem = (updated: PurchaseItem) => {
+    if (onUpdatePurchase) {
+      onUpdatePurchase(updated);
+    } else if (onSavePurchases) {
+      const next = purchases.map((p) => (p.id === updated.id ? updated : p));
+      onSavePurchases(next);
+    }
+  };
+
+  // Fast Conference: "Chegou Tudo Conforme o Pedido"
+  const handleQuickReceiveAll = () => {
+    if (!confirm(`Confirmar que todos os ${aguardandoChegadaCount} produtos pendentes chegaram na loja conforme pedido (Conferido por ${activeChecker})?`)) {
+      return;
+    }
+    const updated = purchases.map((p) => {
+      if (!p.mercadoriaRecebida) {
+        return {
+          ...p,
+          mercadoriaRecebida: true,
+          quantidadeRecebida: p.quantidadePedida || '10 cx',
+          statusConferencia: 'Entregue Completo' as PurchaseStatusConferencia,
+          conferidoPorNome: activeChecker,
+          conferidoPorId: activeChecker === 'Lucas' ? 'USR-04' : 'USR-05',
+          dataConferencia: new Date().toISOString(),
+          dataAtualizacao: new Date().toISOString(),
+        };
+      }
+      return p;
+    });
+
+    if (onSavePurchases) {
+      onSavePurchases(updated);
+    }
+  };
+
+  // Fast Single Item Receive: "Chegou Tudo"
+  const handleQuickReceiveItem = (item: PurchaseItem) => {
+    const isLucas = activeChecker === 'Lucas';
+    const updated: PurchaseItem = {
+      ...item,
+      mercadoriaRecebida: true,
+      quantidadeRecebida: item.quantidadePedida || '10 cx',
+      statusConferencia: 'Entregue Completo',
+      conferidoPorNome: activeChecker,
+      conferidoPorId: isLucas ? 'USR-04' : 'USR-05',
+      dataConferencia: new Date().toISOString(),
+      dataAtualizacao: new Date().toISOString(),
+    };
+    updateItem(updated);
+  };
+
+  // Save Detailed Conference Modal
+  const handleSaveDetailedConference = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingConferenceItem) return;
+
+    const fullPedida = editingConferenceItem.quantidadePedida || '';
+    const recebida = confRecebidaInput.trim() || fullPedida;
+
+    let status: PurchaseStatusConferencia = 'Entregue Completo';
+    if (recebida === '0' || recebida.toLowerCase().includes('nada')) {
+      status = 'Pendente';
+    } else if (recebida !== fullPedida) {
+      status = 'Entrega Parcial / Falta';
+    }
+
+    const isLucas = activeChecker === 'Lucas';
+    const updated: PurchaseItem = {
+      ...editingConferenceItem,
+      mercadoriaRecebida: status !== 'Pendente',
+      quantidadeRecebida: recebida,
+      statusConferencia: status,
+      conferidoPorNome: activeChecker,
+      conferidoPorId: isLucas ? 'USR-04' : 'USR-05',
+      dataConferencia: new Date().toISOString(),
+      motivoDivergencia: confDivergenciaInput.trim() || undefined,
+      dataAtualizacao: new Date().toISOString(),
+    };
+
+    updateItem(updated);
+    setEditingConferenceItem(null);
+  };
+
+  // Fast Toggle Reposicao
+  const handleQuickToggleReposicao = (item: PurchaseItem) => {
+    const nextState = !item.reposicaoConcluida;
+    const updated: PurchaseItem = {
+      ...item,
+      reposicaoConcluida: nextState,
+      repostoPorNome: nextState ? currentUser.nome : undefined,
+      repostoPorId: nextState ? currentUser.id : undefined,
+      dataReposicao: nextState ? new Date().toISOString() : undefined,
+      dataAtualizacao: new Date().toISOString(),
+    };
+    updateItem(updated);
+  };
+
+  // Save detailed reposicao modal
+  const handleSaveDetailedReposicao = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReposicaoItem) return;
+
+    const updated: PurchaseItem = {
+      ...editingReposicaoItem,
+      reposicaoConcluida: true,
+      repostoPorNome: currentUser.nome,
+      repostoPorId: currentUser.id,
+      dataReposicao: new Date().toISOString(),
+      observacaoReposicao: reposicaoObsInput.trim() || undefined,
+      dataAtualizacao: new Date().toISOString(),
+    };
+
+    updateItem(updated);
+    setEditingReposicaoItem(null);
+  };
+
+  // Mark items as sent via WhatsApp
+  const handleMarkAsSentWhatsApp = (itemIds: string[]) => {
+    const updated = purchases.map((p) => {
+      if (itemIds.includes(p.id)) {
+        return {
+          ...p,
+          enviadoWhatsapp: true,
+          dataEnvioWhatsapp: new Date().toISOString(),
+          dataAtualizacao: new Date().toISOString(),
+        };
+      }
+      return p;
+    });
+    if (onSavePurchases) {
+      onSavePurchases(updated);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Banner Informativo */}
-      <div className="bg-gradient-to-r from-emerald-800 to-teal-900 rounded-3xl text-white p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
+      {/* Top Banner Informativo & Ações Rápidas */}
+      <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 rounded-3xl text-white p-6 shadow-md border border-emerald-700/30">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-emerald-300 text-xs font-bold uppercase tracking-wider">
               <ShoppingBag className="w-4 h-4" />
-              Módulo de Compras &amp; Reposição (Simplificado)
+              <span>Setor de Compras, Conferência &amp; Reposição</span>
+              <span className="bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full text-[10px]">
+                Fluxo Chão de Loja
+              </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black mt-1 text-white tracking-tight">
-              Lista de Necessidades &amp; Checklist Direto
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Compras (Charles &amp; Amanda) ➔ Recebimento (Lucas &amp; Rafael) ➔ Reposição
             </h2>
-            <p className="text-xs text-emerald-100/90 mt-1 max-w-2xl leading-relaxed">
-              Desenenhado para agilidade no chão de loja: anote o produto em falta e acompanhe a chegada na loja e a ida pra banca com apenas dois cliques.
+            <p className="text-xs text-emerald-100/90 max-w-2xl leading-relaxed">
+              Faça a lista de compras no app, imprima ou envie por WhatsApp. No dia seguinte, confira o que foi pedido com o que chegou na loja e acompanhe a sobra de produtos que falta repor na banca.
             </p>
           </div>
 
-          <button
-            onClick={onAddPurchase}
-            className="px-5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-bold rounded-2xl text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4 text-emerald-700" />
-            <span>Anotar Falta na Banca</span>
-          </button>
+          {/* Action Buttons for Charles & Amanda */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <button
+              onClick={() => setIsWhatsAppModalOpen(true)}
+              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              title="Enviar pedidos formatados por WhatsApp para fornecedores ou grupo"
+            >
+              <MessageCircle className="w-4 h-4 fill-white" />
+              <span>Enviar WhatsApp</span>
+            </button>
+
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-xs font-bold flex items-center gap-2 border border-white/20 transition-all cursor-pointer"
+              title="Imprimir lista de compras ou planilha de conferência para prancheta"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Imprimir Lista</span>
+            </button>
+
+            <button
+              onClick={onAddPurchase}
+              className="px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black rounded-2xl text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-emerald-700" />
+              <span>+ Novo Pedido</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Pipeline Direto Cards */}
+      {/* Navegação entre as 3 Etapas do Fluxo */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Etapa 1: Lista de Compras */}
         <button
-          onClick={() => setFilterStage('pendente_chegada')}
+          onClick={() => setActiveSubTab('compras')}
           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            filterStage === 'pendente_chegada'
-              ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-200'
+            activeSubTab === 'compras'
+              ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200 shadow-xs'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
         >
-          <div className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-            <Package className="w-4 h-4 text-rose-600" />
-            1. Aguardando Chegada na Loja
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+              <ShoppingBag className="w-4 h-4 text-emerald-600" />
+              1. Lista de Compras
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+              Charles &amp; Amanda
+            </span>
           </div>
-          <div className="text-2xl font-black text-rose-950 mt-1">{pendentesChegadaCount}</div>
-          <div className="text-[11px] text-slate-500">Produtos para comprar/receber</div>
+          <div className="text-2xl font-black text-emerald-950 mt-1.5">{totalPurchases}</div>
+          <div className="text-[11px] text-slate-500">
+            {aguardandoChegadaCount} aguardando chegada do fornecedor
+          </div>
         </button>
 
+        {/* Etapa 2: Conferência de Chegada */}
         <button
-          onClick={() => setFilterStage('aguardando_banca')}
+          onClick={() => setActiveSubTab('conferencia')}
           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            filterStage === 'aguardando_banca'
-              ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200'
+            activeSubTab === 'conferencia'
+              ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200 shadow-xs'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
         >
-          <div className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-amber-600" />
-            2. Chegou! Falta Repor na Banca
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+              <Truck className="w-4 h-4 text-amber-600" />
+              2. Conferência de Chegada
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              Lucas &amp; Rafael
+            </span>
           </div>
-          <div className="text-2xl font-black text-amber-950 mt-1">{aguardandoBancaCount}</div>
-          <div className="text-[11px] text-slate-500">Na loja aguardando ir pra banca</div>
+          <div className="text-2xl font-black text-amber-950 mt-1.5">{recebidosNaLojaCount}/{totalPurchases}</div>
+          <div className="text-[11px] text-slate-500">
+            Tabela comparativa: o que pediu vs o que chegou
+          </div>
         </button>
 
+        {/* Etapa 3: Estoque & Reposição de Banca */}
         <button
-          onClick={() => setFilterStage('concluido')}
+          onClick={() => setActiveSubTab('reposicao')}
           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            filterStage === 'concluido'
-              ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200'
+            activeSubTab === 'reposicao'
+              ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-200 shadow-xs'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
         >
-          <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            3. Reposição Concluída
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-rose-600" />
+              3. Reposição &amp; Sobra
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+              Estoque da Loja
+            </span>
           </div>
-          <div className="text-2xl font-black text-emerald-950 mt-1">{concluidasCount}</div>
-          <div className="text-[11px] text-slate-500">Banca abastecida / Estoque guardado</div>
+          <div className="text-2xl font-black text-rose-950 mt-1.5">{faltaReporCount}</div>
+          <div className="text-[11px] text-slate-500">
+            {faltaReporCount === 1 ? 'Produto falta repor na banca' : 'Produtos que faltam repor na banca'}
+          </div>
         </button>
       </div>
 
-      {/* Control Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative flex-1 w-full sm:w-auto">
+      {/* Control Bar: Busca e Filtros */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Buscar produto ou quem anotou a falta..."
+            placeholder="Buscar por produto, fornecedor ou responsável..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          {filterStage !== 'todos' && (
+        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
+          {/* Fornecedor Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">Fornecedor:</span>
+            <select
+              value={supplierFilter}
+              onChange={(e) => setSupplierFilter(e.target.value)}
+              className="px-2.5 py-1.5 bg-slate-50 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="todos">Todos ({purchases.length})</option>
+              {suppliers.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {supplierFilter !== 'todos' && (
             <button
-              onClick={() => setFilterStage('todos')}
+              onClick={() => setSupplierFilter('todos')}
               className="text-xs text-slate-500 hover:text-slate-800 underline font-semibold cursor-pointer"
             >
-              Ver Todos ({purchases.length})
+              Limpar
             </button>
           )}
 
           <button
             onClick={onAddPurchase}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Adicionar Produto</span>
+            <span>Adicionar</span>
           </button>
         </div>
       </div>
 
-      {/* Checklist Table (Tabela 3) */}
-      {filteredItems.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500">
-          <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-sm font-medium">Nenhum produto em falta registrado no momento.</p>
-          <button
-            onClick={onAddPurchase}
-            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Lançar Falta na Banca
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
-          {filteredItems.map((item) => {
-            const isCompleted = item.mercadoriaRecebida && item.reposicaoConcluida;
-
-            return (
-              <div
-                key={item.id}
-                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                  isCompleted ? 'bg-slate-50/60' : 'hover:bg-slate-50/80'
-                }`}
+      {/* ======================= ABA 1: LISTA DE COMPRAS (CHARLES & AMANDA) ======================= */}
+      {activeSubTab === 'compras' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200">
+            <div>
+              <h3 className="font-bold text-sm text-emerald-950 flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-emerald-700" />
+                Lista de Compras — Charles &amp; Amanda
+              </h3>
+              <p className="text-xs text-emerald-800">
+                Itens lançados com Nome, Quantidade e Fornecedor prontos para cotação e envio
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsWhatsAppModalOpen(true)}
+                className="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                      {item.id}
-                    </span>
-                    <span className="text-xs text-slate-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {item.data}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      • Por: <strong className="text-slate-700">{item.solicitadoPorNome}</strong>
-                    </span>
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Enviar p/ WhatsApp</span>
+              </button>
+              <button
+                onClick={() => setIsPrintModalOpen(true)}
+                className="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Imprimir</span>
+              </button>
+            </div>
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500">
+              <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-medium">Nenhum pedido de compra encontrado para os filtros.</p>
+              <button
+                onClick={onAddPurchase}
+                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Lançar Novo Pedido de Compra
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/80 transition-colors"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-bold">
+                        {item.id}
+                      </span>
+                      <span className="text-xs text-slate-600 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        {item.data}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Por: {item.solicitadoPorNome}
+                      </span>
+                      {item.categoria && (
+                        <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          {item.categoria}
+                        </span>
+                      )}
+                      {item.enviadoWhatsapp && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="w-3 h-3" /> WhatsApp Enviado
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-baseline gap-2 flex-wrap pt-0.5">
+                      <h4 className="text-base font-black text-slate-900">{item.produto}</h4>
+                      <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-md font-mono">
+                        Qtd: {item.quantidadePedida || '10 cx'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md">
+                        Fornecedor: <strong className="text-slate-900">{item.fornecedor || 'Ceasa Box 14'}</strong>
+                      </span>
+                    </div>
+
+                    {item.observacao && (
+                      <p className="text-xs text-slate-600 bg-amber-50/60 px-2.5 py-1 rounded-lg border border-amber-200/80 max-w-2xl">
+                        {item.observacao}
+                      </p>
+                    )}
                   </div>
 
-                  <h3
-                    className={`text-base font-bold text-slate-900 ${
-                      isCompleted ? 'line-through text-slate-400' : ''
-                    }`}
-                  >
-                    {item.produto}
-                  </h3>
+                  {/* Actions for Purchase List */}
+                  <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                        item.mercadoriaRecebida
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {item.mercadoriaRecebida ? '✓ Na Loja' : 'Aguardando Chegada'}
+                    </span>
 
-                  {item.observacao && (
-                    <p className="text-xs text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 max-w-xl">
-                      {item.observacao}
-                    </p>
-                  )}
-                </div>
-
-                {/* Direct Action Checklist: Checkbox a & Checkbox b (Section 3) */}
-                <div className="flex items-center gap-3 sm:gap-4 flex-wrap shrink-0">
-                  {/* a. Mercadoria Recebida */}
-                  <label
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer text-xs font-bold ${
-                      item.mercadoriaRecebida
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.mercadoriaRecebida}
-                      onChange={() => onToggleRecebida(item.id, item.mercadoriaRecebida)}
-                      className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                    />
-                    <span>a. Chegou na Loja</span>
-                  </label>
-
-                  {/* b. Reposição Concluída */}
-                  <label
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer text-xs font-bold ${
-                      item.reposicaoConcluida
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                        : item.mercadoriaRecebida
-                        ? 'bg-amber-50 text-amber-900 border-amber-300 hover:border-amber-400'
-                        : 'bg-slate-50 text-slate-400 border-slate-200 opacity-60'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.reposicaoConcluida}
-                      onChange={() => onToggleReposicao(item.id, item.reposicaoConcluida)}
-                      className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                    />
-                    <span>b. Reposto na Banca</span>
-                  </label>
-
-                  {/* Actions for Admin / Edit */}
-                  <div className="flex items-center border-l border-slate-200 pl-2">
                     <button
                       onClick={() => onEditPurchase(item)}
-                      className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                      className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
                       title="Editar"
                     >
-                      <Edit className="w-3.5 h-3.5" />
+                      <Edit className="w-4 h-4" />
                     </button>
                     {isAdmin && (
                       <button
                         onClick={() => onDeletePurchase(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
                         title="Excluir"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {/* ======================= ABA 2: CONFERÊNCIA DE RECEBIMENTO (LUCAS & RAFAEL) ======================= */}
+      {activeSubTab === 'conferencia' && (
+        <div className="space-y-4">
+          {/* Top Checker Selector & Bulk Action */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/80 p-4 rounded-2xl border border-amber-200">
+            <div>
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-700" />
+                <h3 className="font-black text-sm text-amber-950">
+                  Tabela Comparativa: O Que Foi Pedido vs O Que Chegou na Loja
+                </h3>
+              </div>
+              <p className="text-xs text-amber-900 mt-0.5">
+                Conferência física feita por Lucas ou Rafael no descarregamento das mercadorias
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Checker Switcher */}
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-amber-300">
+                <span className="text-[11px] font-bold text-slate-600 px-1">Conferente:</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveChecker('Lucas')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeChecker === 'Lucas'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Lucas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveChecker('Rafael')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeChecker === 'Rafael'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Rafael
+                </button>
+              </div>
+
+              {aguardandoChegadaCount > 0 && (
+                <button
+                  onClick={handleQuickReceiveAll}
+                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Marcar todos os itens pendentes como entregues 100% conforme o pedido"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Chegou Tudo Conforme Pedido</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Comparison Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-800 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="p-3">Produto &amp; Categoria</th>
+                    <th className="p-3">Fornecedor</th>
+                    <th className="p-3 text-center">O Que Foi Pedido</th>
+                    <th className="p-3 text-center bg-amber-50/70">O Que Chegou na Loja</th>
+                    <th className="p-3 text-center">Status / Divergência</th>
+                    <th className="p-3 text-center">Conferido Por</th>
+                    <th className="p-3 text-right">Ação Rápida</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredItems.map((item) => {
+                    const status = item.statusConferencia || (item.mercadoriaRecebida ? 'Entregue Completo' : 'Pendente');
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        {/* Produto */}
+                        <td className="p-3">
+                          <span className="font-bold text-slate-900 text-xs block">{item.produto}</span>
+                          <span className="text-[10px] text-slate-500">
+                            Pedente por: {item.solicitadoPorNome} • {item.categoria || 'Geral'}
+                          </span>
+                        </td>
+
+                        {/* Fornecedor */}
+                        <td className="p-3 font-semibold text-slate-700">
+                          {item.fornecedor || 'Ceasa Box 14'}
+                        </td>
+
+                        {/* O que foi pedido */}
+                        <td className="p-3 text-center">
+                          <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-900 font-mono font-bold text-xs">
+                            {item.quantidadePedida || '10 cx'}
+                          </span>
+                        </td>
+
+                        {/* O que chegou na loja */}
+                        <td className="p-3 text-center bg-amber-50/30">
+                          {item.mercadoriaRecebida ? (
+                            <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-950 font-mono font-bold text-xs border border-emerald-300">
+                              {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
+                            </span>
+                          ) : (
+                            <span className="text-rose-600 font-bold text-xs italic">
+                              Não Chegou
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Status / Divergência */}
+                        <td className="p-3 text-center">
+                          {status === 'Entregue Completo' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ✓ Entregue Completo
+                            </span>
+                          ) : status === 'Entrega Parcial / Falta' ? (
+                            <div className="space-y-0.5">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                ⚠ Entrega Parcial
+                              </span>
+                              {item.motivoDivergencia && (
+                                <p className="text-[10px] text-amber-800 truncate max-w-36 mx-auto">
+                                  {item.motivoDivergencia}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Conferido Por */}
+                        <td className="p-3 text-center text-[11px]">
+                          {item.conferidoPorNome ? (
+                            <div className="font-bold text-slate-800">
+                              <span className="text-emerald-700">✓ {item.conferidoPorNome}</span>
+                              {item.dataConferencia && (
+                                <span className="block text-[10px] text-slate-400 font-normal">
+                                  {new Date(item.dataConferencia).toLocaleTimeString('pt-BR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Aguardando</span>
+                          )}
+                        </td>
+
+                        {/* Ações */}
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {!item.mercadoriaRecebida ? (
+                              <button
+                                onClick={() => handleQuickReceiveItem(item)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
+                                title={`Marcar que chegou tudo conforme pedido conferido por ${activeChecker}`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Chegou Tudo</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onToggleRecebida(item.id, true)}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                title="Desmarcar recebimento"
+                              >
+                                Reverter
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                setEditingConferenceItem(item);
+                                setConfRecebidaInput(item.quantidadeRecebida || item.quantidadePedida || '10 cx');
+                                setConfDivergenciaInput(item.motivoDivergencia || '');
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-amber-800 rounded-lg hover:bg-amber-50 cursor-pointer"
+                              title="Anotar quantidade diferente ou divergência"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= ABA 3: ESTOQUE RECEBIDO & REPOSIÇÃO DE BANCA (O QUE FALTA REPOR) ======================= */}
+      {activeSubTab === 'reposicao' && (
+        <div className="space-y-4">
+          {/* Dashboard de Estoque e Falta Repor */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
+              <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                <Package className="w-4 h-4 text-emerald-600" />
+                Estoque Recebido na Loja
+              </div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{recebidosNaLojaCount} itens</div>
+              <div className="text-[11px] text-slate-500">Produtos físicos já conferidos</div>
+            </div>
+
+            <div className="p-4 bg-rose-50 rounded-2xl border border-rose-300 shadow-xs ring-2 ring-rose-200">
+              <div className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                🔴 O QUE FALTA REPÔR NA BANCA
+              </div>
+              <div className="text-2xl font-black text-rose-950 mt-1">{faltaReporCount} produtos</div>
+              <div className="text-[11px] text-rose-800 font-semibold">
+                Estoque na loja aguardando abastecimento de banca
+              </div>
+            </div>
+
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-300 shadow-xs">
+              <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Banca Abastecida (Reposto)
+              </div>
+              <div className="text-2xl font-black text-emerald-950 mt-1">{reposicaoConcluidaCount} produtos</div>
+              <div className="text-[11px] text-emerald-800 font-semibold">
+                Produtos prontos no salão de vendas
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-filtros de Reposição */}
+          <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">Visualizar Estoque:</span>
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setReposicaoSubFilter('falta_repor')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    reposicaoSubFilter === 'falta_repor'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  Falta Repor ({faltaReporCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReposicaoSubFilter('reposto')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    reposicaoSubFilter === 'reposto'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  Reposto na Banca ({reposicaoConcluidaCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReposicaoSubFilter('todos')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    reposicaoSubFilter === 'todos'
+                      ? 'bg-slate-800 text-white shadow-2xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  Todos Recebidos ({recebidosNaLojaCount})
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 font-medium hidden sm:block">
+              Marque o checkbox quando o produto for colocado na banca do salão
+            </div>
+          </div>
+
+          {/* Lista de Reposição */}
+          {filteredItems.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500">
+              <PackageCheck className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">
+                {reposicaoSubFilter === 'falta_repor'
+                  ? 'Parabéns! Todas as mercadorias recebidas já foram repostas na banca.'
+                  : 'Nenhum produto encontrado nesta categoria.'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                    item.reposicaoConcluida
+                      ? 'bg-emerald-50/40'
+                      : 'bg-rose-50/20 hover:bg-rose-50/40'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                        {item.id}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">
+                        Qtd em Estoque: {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
+                      </span>
+                      <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                        Fornecedor: <strong className="text-slate-800">{item.fornecedor || 'Ceasa Box 14'}</strong>
+                      </span>
+                      {item.conferidoPorNome && (
+                        <span className="text-[11px] text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">
+                          Conferido por: {item.conferidoPorNome}
+                        </span>
+                      )}
+                    </div>
+
+                    <h4
+                      className={`text-base font-black ${
+                        item.reposicaoConcluida
+                          ? 'line-through text-slate-400'
+                          : 'text-slate-900'
+                      }`}
+                    >
+                      {item.produto}
+                    </h4>
+
+                    {item.observacaoReposicao && (
+                      <p className="text-xs text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        Sobra de estoque / Observação: {item.observacaoReposicao}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Checklist Button: Reposto na Banca */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      onClick={() => handleQuickToggleReposicao(item)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                        item.reposicaoConcluida
+                          ? 'bg-emerald-600 text-white shadow-xs hover:bg-emerald-700'
+                          : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20'
+                      }`}
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{item.reposicaoConcluida ? '✓ Reposto na Banca' : 'Marcar como Reposto'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingReposicaoItem(item);
+                        setReposicaoObsInput(item.observacaoReposicao || '');
+                      }}
+                      className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl cursor-pointer"
+                      title="Anotar sobra de estoque na câmara ou observação"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================= MODAL: ANOTAR DIVERGÊNCIA DE CONFERÊNCIA ======================= */}
+      {editingConferenceItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-600" />
+                Registrar Conferência de Chegada
+              </h3>
+              <button
+                onClick={() => setEditingConferenceItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDetailedConference} className="mt-4 space-y-3.5 text-xs">
+              <div>
+                <span className="text-slate-500 block mb-0.5">Produto:</span>
+                <span className="text-sm font-black text-slate-900">{editingConferenceItem.produto}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-slate-500 block font-semibold">Qtd Pedida:</span>
+                  <span className="text-sm font-mono font-bold text-slate-900">
+                    {editingConferenceItem.quantidadePedida || '10 cx'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block font-semibold">Fornecedor:</span>
+                  <span className="text-xs font-bold text-slate-800">
+                    {editingConferenceItem.fornecedor || 'Ceasa Box 14'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Quantidade Realmente Recebida na Loja *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: 8 cx (se faltaram 2), 12 cx (se veio a mais)"
+                  value={confRecebidaInput}
+                  onChange={(e) => setConfRecebidaInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-900 focus:ring-2 focus:ring-amber-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Motivo da Divergência / Observação de Avaria (Opcional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Faltaram 2 caixas no caminhão, 1 caixa machucada devolvida"
+                  value={confDivergenciaInput}
+                  onChange={(e) => setConfDivergenciaInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 focus:ring-2 focus:ring-amber-500 text-xs"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingConferenceItem(null)}
+                  className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Salvar Conferência ({activeChecker})
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAL: ANOTAR SOBRA DE REPOSIÇÃO ======================= */}
+      {editingReposicaoItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-emerald-600" />
+                Reposição &amp; Sobra de Estoque
+              </h3>
+              <button
+                onClick={() => setEditingReposicaoItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDetailedReposicao} className="mt-4 space-y-3.5 text-xs">
+              <div>
+                <span className="text-slate-500 block mb-0.5">Produto:</span>
+                <span className="text-sm font-black text-slate-900">{editingReposicaoItem.produto}</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-slate-500 block font-semibold">Qtd Recebida em Estoque:</span>
+                <span className="text-sm font-mono font-bold text-slate-900">
+                  {editingReposicaoItem.quantidadeRecebida || editingReposicaoItem.quantidadePedida || '10 cx'}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Observação de Sobra (O que foi pra banca vs O que ficou guardado):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 6 cx na banca, sobra de 4 cx na câmara fria"
+                  value={reposicaoObsInput}
+                  onChange={(e) => setReposicaoObsInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 text-xs"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingReposicaoItem(null)}
+                  className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Confirmar Reposição na Banca
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      <PurchaseWhatsAppModal
+        isOpen={isWhatsAppModalOpen}
+        onClose={() => setIsWhatsAppModalOpen(false)}
+        purchases={purchases}
+        settings={settings}
+        currentUser={currentUser}
+        onMarkAsSent={handleMarkAsSentWhatsApp}
+      />
+
+      {/* Print Modal */}
+      <PurchasePrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        purchases={purchases}
+        settings={settings}
+        currentUser={currentUser}
+      />
     </div>
   );
 };

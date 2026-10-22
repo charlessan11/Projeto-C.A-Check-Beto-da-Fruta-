@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="gradBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#16a34a"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    <linearGradient id="gradFruit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="gradLeaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#052e16" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="url(#gradBg)"/>
+
+  <!-- Subtle Inner Ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#22c55e" stroke-width="4" stroke-opacity="0.3"/>
+
+  <!-- Fruit Emblem -->
+  <g filter="url(#shadow)" transform="translate(0, -10)">
+    <!-- Main Orange / Apple Body -->
+    <circle cx="256" cy="270" r="110" fill="url(#gradFruit)"/>
+    
+    <!-- Fruit Slice / Accent Curve -->
+    <path d="M190 270 Q256 340 322 270 Q256 370 190 270 Z" fill="#ffffff" fill-opacity="0.2"/>
+
+    <!-- Leaves -->
+    <path d="M256 160 C230 110 280 80 320 100 C340 140 300 170 256 160 Z" fill="url(#gradLeaf)"/>
+    <path d="M256 160 C270 120 220 100 190 120 C180 150 215 170 256 160 Z" fill="#4ade80"/>
+    <path d="M256 160 L256 185" stroke="#78350f" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="256" y="440" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="900" fill="#ffffff" letter-spacing="2">
+    BETO DA FRUTA
+  </text>
+  <text x="256" y="472" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#bbf7d0" letter-spacing="4">
+    HORTIFRÚTI
+  </text>
+</svg>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Store,
   ShieldCheck,
@@ -9,8 +9,11 @@ import {
   CheckCircle2,
   Clock,
   Layers,
+  Lock,
 } from 'lucide-react';
 import { User, Task } from '../types';
+import { AndroidInstallButton } from './AndroidInstallButton';
+import { AdminPinModal } from './AdminPinModal';
 
 interface LoginScreenProps {
   users: User[];
@@ -25,11 +28,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onSelectUser,
   storeName,
 }) => {
+  const [adminForPin, setAdminForPin] = useState<User | null>(null);
+
   const adminUsers = users.filter((u) => u.perfil === 'Administrador');
   const opUsers = users.filter((u) => u.perfil === 'Operacional');
 
   const getUserPendingTasksCount = (userId: string) => {
     return tasks.filter((t) => t.responsavelId === userId && t.status !== 'Concluída').length;
+  };
+
+  const handleUserClick = (user: User) => {
+    if (user.perfil === 'Administrador') {
+      setAdminForPin(user);
+    } else {
+      onSelectUser(user);
+    }
   };
 
   return (
@@ -63,8 +76,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               Identificação do Colaborador
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Selecione o seu nome para acessar o painel de tarefas e compras da sua função
+              Selecione o seu nome para acessar o painel de rotinas diárias, tarefas e reposição
             </p>
+
+            {/* Android Install Banner inside Login */}
+            <div className="mt-4 max-w-md mx-auto">
+              <AndroidInstallButton variant="login" />
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -83,7 +101,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   return (
                     <button
                       key={user.id}
-                      onClick={() => onSelectUser(user)}
+                      onClick={() => handleUserClick(user)}
                       className="group p-4 bg-slate-800/80 hover:bg-emerald-950/70 border border-slate-700/80 hover:border-emerald-500/70 rounded-2xl text-left transition-all duration-150 hover:shadow-lg hover:shadow-emerald-950/50 flex flex-col justify-between cursor-pointer"
                     >
                       <div>
@@ -93,9 +111,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           >
                             {user.nome.charAt(0)}
                           </div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                            {user.perfil}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <Lock className="w-2.5 h-2.5" />
+                              PIN
+                            </span>
+                          </div>
                         </div>
 
                         <div className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
@@ -186,6 +207,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           Metodologia SMART • Regra dos 2 Minutos (GTD) • Técnica Pomodoro • Espelhamento Físico em Prancheta
         </p>
       </div>
+
+      {/* Admin 4-Digit PIN Security Modal */}
+      <AdminPinModal
+        isOpen={!!adminForPin}
+        targetAdmin={adminForPin}
+        onClose={() => setAdminForPin(null)}
+        onSuccess={(admin) => {
+          setAdminForPin(null);
+          onSelectUser(admin);
+        }}
+      />
     </div>
   );
 };

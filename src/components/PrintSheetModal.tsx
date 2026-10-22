@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Printer, CheckSquare, Sparkles, Copy, Check, Download, AlertCircle } from 'lucide-react';
-import { Task, User, StoreSettings, Prioridade } from '../types';
+import { Task, User, StoreSettings, Prioridade, DailyRoutine } from '../types';
 import { getTodayDateString } from '../services/storage';
 
 interface PrintSheetModalProps {
@@ -9,6 +9,7 @@ interface PrintSheetModalProps {
   tasks: Task[];
   users: User[];
   settings: StoreSettings;
+  routine?: DailyRoutine;
 }
 
 export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
@@ -17,6 +18,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
   tasks,
   users,
   settings,
+  routine,
 }) => {
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [turno, setTurno] = useState<'Manhã' | 'Tarde' | 'Noite' | 'Integral'>('Manhã');
@@ -229,6 +231,82 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Bloco 0 - Rotinas Diárias Obrigatórias (Escala Fixa do Hortifrúti) */}
+            {routine && (
+              <div className="mb-5 p-3 rounded-lg border border-emerald-500 bg-emerald-50/30 print-avoid-break">
+                <div className="flex items-center justify-between mb-2 pb-1 border-b border-emerald-300">
+                  <h2 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                    📋 ESCALA DE ROTINAS DIÁRIAS OBRIGATÓRIAS (BETO DA FRUTA)
+                  </h2>
+                  <span className="text-[10px] font-bold text-emerald-800">
+                    {routine.isSextaFeira ? '⚡ Sexta-feira: Meta Coco 50-75L' : 'Dia Regular: Meta Coco 28-35L'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {/* Coluna 1: Reposição e Balcão */}
+                  <div className="space-y-1.5 border-r md:border-slate-300 pr-2">
+                    <div className="font-bold text-slate-900 border-b border-slate-200 pb-0.5 text-[11px] uppercase">
+                      1. Reposição do Hortifrúti (Contador assume Exp C + Bianca)
+                    </div>
+                    {routine.expositores.map((exp) => (
+                      <div key={exp.expositor} className="flex items-start gap-1.5 leading-tight">
+                        <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                        <span>
+                          <strong>{exp.expositor}:</strong> {exp.responsavelNome}
+                          {exp.auxiliarNome && ` (Auxílio: ${exp.auxiliarNome})`}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="pt-1.5 flex items-start gap-1.5 leading-tight text-slate-800">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Atendimento Balcão:</strong> {routine.atendimentoBalcao.responsavelNome}{' '}
+                        <span className="text-[10px] text-slate-500">(atende + repõe)</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Coluna 2: Limpezas, Freezers, Kombi, Coco, Compras */}
+                  <div className="space-y-1.5">
+                    <div className="font-bold text-slate-900 border-b border-slate-200 pb-0.5 text-[11px] uppercase">
+                      2. Limpeza, Produção &amp; Apoio Operacional
+                    </div>
+                    <div className="flex items-start gap-1.5 leading-tight">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Limpezas:</strong> Rita (Circulação, Produção, Banheiros, Estoque, Materiais) | Bianca (Caixa, Balcão)
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5 leading-tight">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Freezers:</strong> Vanessa (Conferência de temperatura &amp; produtos congelados)
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5 leading-tight">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Descarga Kombi:</strong> {routine.descargaKombi.responsavelNome} (Lucas ou Rafael)
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5 leading-tight">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Água de Coco:</strong> {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome} (Responsável único: Lucas ou Rafael • Meta: {routine.aguaDeCoco.metaMinLitros}–{routine.aguaDeCoco.metaMaxLitros}L + Corte polpa + Descarte lixo)
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5 leading-tight">
+                      <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
+                      <span>
+                        <strong>Lista de Compras:</strong> Charles (Checagem de faltas e pedido ao Ceasa)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Bloco 1 - Micro-Ações Rápidas (2 Minutos GTD) */}
             <div className="mb-5 p-3 rounded-lg border border-amber-400 bg-amber-50/40 print-avoid-break">

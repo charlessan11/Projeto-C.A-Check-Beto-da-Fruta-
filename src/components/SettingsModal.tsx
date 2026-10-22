@@ -1,26 +1,30 @@
 import React, { useState } from 'react';
-import { X, Clock, Settings, Bell, Store, User, Sparkles, Check, CheckCircle2 } from 'lucide-react';
-import { StoreSettings } from '../types';
+import { X, Clock, Settings, Bell, Store, User as UserIcon, Sparkles, Check, CheckCircle2, KeyRound, ShieldCheck } from 'lucide-react';
+import { StoreSettings, User } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: StoreSettings;
+  currentUser?: User | null;
   onSave: (newSettings: StoreSettings) => void;
   onPreviewCheckin: () => void;
+  onOpenChangePin?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   settings,
+  currentUser,
   onSave,
   onPreviewCheckin,
+  onOpenChangePin,
 }) => {
   const [nomeLoja, setNomeLoja] = useState(settings.nomeLoja);
   const [unidade, setUnidade] = useState(settings.unidade || 'Loja Principal');
   const [gerente, setGerente] = useState(settings.gerenteResponsavel);
-  const [horarioCheckin, setHorarioCheckin] = useState(settings.horarioCheckinMatinal || '07:00');
+  const [horarioCheckin, setHorarioCheckin] = useState(settings.horarioCheckinMatinal || '08:00');
   const [checkinAtivo, setCheckinAtivo] = useState(settings.checkinAtivo ?? true);
   const [mensagem, setMensagem] = useState(
     settings.mensagemBoasVindas ||
@@ -183,7 +187,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-slate-500" />
+                  <UserIcon className="w-3.5 h-3.5 text-slate-500" />
                   Encarregado Geral
                 </label>
                 <input
@@ -195,6 +199,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Seção Segurança do Administrador (PIN Individual) */}
+          {currentUser?.perfil === 'Administrador' && onOpenChangePin && (
+            <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2.5 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Segurança de Acesso (PIN de 4 Dígitos)
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Perfil ativo: <strong>{currentUser.nome}</strong> (Administrador)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-300">
+                Cada administrador possui sua própria senha individual de 4 dígitos. A alteração afeta somente o seu acesso.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenChangePin();
+                }}
+                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Alterar Minha Senha de Administrador (PIN)</span>
+              </button>
+            </div>
+          )}
 
           {/* Botões do Rodapé */}
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">

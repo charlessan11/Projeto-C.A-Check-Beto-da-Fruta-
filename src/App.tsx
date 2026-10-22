@@ -18,7 +18,8 @@ import {
   resetToDefaults,
   getTodayDateString,
 } from './services/storage';
-import { User, Task, PurchaseItem, StoreSettings } from './types';
+import { loadDailyRoutine, saveDailyRoutine, syncRoutineWithTaskList } from './services/routineEngine';
+import { User, Task, PurchaseItem, StoreSettings, DailyRoutine } from './types';
 import { Header } from './components/Header';
 import { TaskList } from './components/TaskList';
 import { TaskModal } from './components/TaskModal';
@@ -34,6 +35,9 @@ import { SettingsModal } from './components/SettingsModal';
 import { CheckinWelcomeModal } from './components/CheckinWelcomeModal';
 import { LoginScreen } from './components/LoginScreen';
 import { PomodoroModal } from './components/PomodoroModal';
+import { DailyRoutinesTab } from './components/DailyRoutinesTab';
+import { ChangeAdminPinModal } from './components/ChangeAdminPinModal';
+import { SystemManualModal } from './components/SystemManualModal';
 import { CheckCircle2, AlertTriangle, Sparkles, X } from 'lucide-react';
 
 export default function App() {
@@ -42,9 +46,10 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [purchases, setPurchases] = useState<PurchaseItem[]>([]);
   const [settings, setSettings] = useState<StoreSettings>(loadSettings());
+  const [routine, setRoutine] = useState<DailyRoutine>(() => loadDailyRoutine());
 
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState<'tasks' | 'purchases' | 'audit' | 'stats'>('tasks');
+  // Navigation tab (defaults to rotinas for daily operational focus)
+  const [activeTab, setActiveTab] = useState<'rotinas' | 'tasks' | 'purchases' | 'audit' | 'stats'>('rotinas');
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -60,6 +65,8 @@ export default function App() {
   const [isUserSwitcherOpen, setIsUserSwitcherOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
+  const [isChangePinOpen, setIsChangePinOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
 
   // Pomodoro Timer state
   const [isPomodoroOpen, setIsPomodoroOpen] = useState(false);
@@ -114,13 +121,37 @@ export default function App() {
     }
   }, [currentUser?.id, settings.checkinAtivo]);
 
+  // Enforce access control: only Administradores can view 'audit' and 'stats'
+  useEffect(() => {
+    if (currentUser && currentUser.perfil !== 'Administrador') {
+      if (activeTab === 'audit' || activeTab === 'stats') {
+        setActiveTab('rotinas');
+      }
+    }
+  }, [currentUser?.perfil, activeTab]);
+
+  const handleUpdateRoutine = (updated: DailyRoutine) => {
+    setRoutine(updated);
+    saveDailyRoutine(updated);
+  };
+
+  const handleSyncRoutineWithTasks = () => {
+    const updatedTasks = syncRoutineWithTaskList(routine, tasks);
+    setTasks(updatedTasks);
+    saveTasks(updatedTasks);
+    showToast(
+      'Rotinas Sincronizadas!',
+      'As rotinas de hoje foram espelhadas no Quadro Geral de Tarefas.'
+    );
+  };
+
   const handleConfirmCheckin = () => {
     if (currentUser) {
       const today = getTodayDateString();
       const checkinKey = `hortigestion_checkin_${currentUser.id}_${today}`;
       localStorage.setItem(checkinKey, new Date().toISOString());
     }
-    setActiveTab('tasks');
+    setActiveTab('rotinas');
     showToast(
       'Check-in matinal confirmado!',
       `Bom turno de trabalho, ${currentUser?.nome.split(' ')[0]}!`
@@ -368,7 +399,8 @@ export default function App() {
   }, [tasks, today]);
 
   const purchasesAlertCount = useMemo(() => {
-    return purchases.filter((p) => !p.mercadoriaRecebida).length;
+    // Shows items pending arrival OR pending replenishment on the shelf
+    return purchases.filter((p) => !p.reposicaoConcluida).length;
   }, [purchases]);
 
   // If no user is logged in, display the Login Screen with all employees (Beto da Fruta)
@@ -419,12 +451,28 @@ export default function App() {
         onOpenPrintModal={() => setIsPrintModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onOpenCheckinModal={() => setIsCheckinModalOpen(true)}
+        onOpenChangePin={() => setIsChangePinOpen(true)}
+        onOpenManual={() => setIsManualOpen(true)}
         settings={settings}
         onResetData={handleResetData}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 sm:py-6">
+        {/* Aba 1: Rotinas Diárias Obrigatórias (Beto da Fruta) */}
+        {activeTab === 'rotinas' && (
+          <DailyRoutinesTab
+            routine={routine}
+            onUpdateRoutine={handleUpdateRoutine}
+            users={users}
+            currentUser={currentUser}
+            onOpenPrintModal={() => setIsPrintModalOpen(true)}
+            onNavigateToPurchases={() => setActiveTab('purchases')}
+            onSyncWithTasks={handleSyncRoutineWithTasks}
+          />
+        )}
+
+        {/* Aba 2: Quadro Geral de Tarefas */}
         {activeTab === 'tasks' && (
           <TaskList
             tasks={tasks}
@@ -449,10 +497,12 @@ export default function App() {
           />
         )}
 
+        {/* Aba 3: Compras & Reposição */}
         {activeTab === 'purchases' && (
           <PurchaseList
             purchases={purchases}
             currentUser={currentUser}
+            settings={settings}
             onAddPurchase={() => {
               setPurchaseToEdit(null);
               setIsPurchaseModalOpen(true);
@@ -464,12 +514,29 @@ export default function App() {
             onDeletePurchase={handleDeletePurchase}
             onToggleRecebida={handleToggleRecebida}
             onToggleReposicao={handleToggleReposicao}
+            onSavePurchases={handleSavePurchases}
+            onUpdatePurchase={(item) => {
+              const updated = purchases.map((p) => (p.id === item.id ? item : p));
+              handleSavePurchases(updated);
+            }}
           />
         )}
 
-        {activeTab === 'audit' && <AuditLogView tasks={tasks} users={users} />}
+        {/* Aba 4: Auditoria & Baixas - Somente Administradores */}
+        {activeTab === 'audit' && currentUser.perfil === 'Administrador' && (
+          <AuditLogView tasks={tasks} users={users} />
+        )}
 
-        {activeTab === 'stats' && <StatsDashboard tasks={tasks} users={users} />}
+        {/* Aba 5: Estatísticas & Tempos - Somente Administradores */}
+        {activeTab === 'stats' && currentUser.perfil === 'Administrador' && (
+          <StatsDashboard
+            tasks={tasks}
+            users={users}
+            currentUser={currentUser}
+            settings={settings}
+            routine={routine}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -531,6 +598,7 @@ export default function App() {
         tasks={tasks}
         users={users}
         settings={settings}
+        routine={routine}
       />
 
       <UserSwitcherModal
@@ -546,8 +614,10 @@ export default function App() {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
+        currentUser={currentUser}
         onSave={handleSaveSettings}
         onPreviewCheckin={() => setIsCheckinModalOpen(true)}
+        onOpenChangePin={() => setIsChangePinOpen(true)}
       />
 
       <CheckinWelcomeModal
@@ -557,9 +627,25 @@ export default function App() {
         settings={settings}
         todayTasks={tasks.filter((t) => t.dataProgramada === today)}
         purchases={purchases}
+        routine={routine}
         onOpenPrintModal={() => setIsPrintModalOpen(true)}
         onConfirmCheckin={handleConfirmCheckin}
       />
+
+      {/* Modal para Alterar Senha de Administrador (PIN Individual) */}
+      {currentUser && currentUser.perfil === 'Administrador' && (
+        <ChangeAdminPinModal
+          isOpen={isChangePinOpen}
+          onClose={() => setIsChangePinOpen(false)}
+          currentUser={currentUser}
+          onSuccess={() => {
+            showToast(
+              'Senha de Administrador alterada com sucesso!',
+              `A nova senha de 4 dígitos foi salva individualmente para ${currentUser.nome}.`
+            );
+          }}
+        />
+      )}
 
       <PomodoroModal
         isOpen={isPomodoroOpen}
@@ -572,6 +658,12 @@ export default function App() {
           setActiveTab('tasks');
           setFocusTwoMinuteQueue(true);
         }}
+      />
+
+      <SystemManualModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
+        settings={settings}
       />
 
       {/* Confirmation Dialog Modal (safe for iframes, no window.confirm) */}

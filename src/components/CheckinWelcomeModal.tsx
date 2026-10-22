@@ -12,7 +12,7 @@ import {
   ShoppingBag,
   Layers,
 } from 'lucide-react';
-import { User, Task, PurchaseItem, StoreSettings } from '../types';
+import { User, Task, PurchaseItem, StoreSettings, DailyRoutine } from '../types';
 
 interface CheckinWelcomeModalProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface CheckinWelcomeModalProps {
   settings: StoreSettings;
   todayTasks: Task[];
   purchases: PurchaseItem[];
+  routine?: DailyRoutine;
   onOpenPrintModal: () => void;
   onConfirmCheckin: () => void;
 }
@@ -32,6 +33,7 @@ export const CheckinWelcomeModal: React.FC<CheckinWelcomeModalProps> = ({
   settings,
   todayTasks,
   purchases,
+  routine,
   onOpenPrintModal,
   onConfirmCheckin,
 }) => {
@@ -117,6 +119,65 @@ export const CheckinWelcomeModal: React.FC<CheckinWelcomeModalProps> = ({
             <div>
               <strong className="text-emerald-900">Orientação do Encarregado:</strong>{' '}
               {settings.mensagemBoasVindas}
+            </div>
+          </div>
+        )}
+
+        {/* Personalized Daily Routine Briefing for Logged Employee */}
+        {routine && (
+          <div className="mt-3 p-3.5 bg-slate-900 text-white rounded-2xl border border-slate-800 text-xs space-y-1.5 shadow-md">
+            <div className="flex items-center justify-between text-emerald-400 font-bold uppercase tracking-wider text-[11px]">
+              <span>📋 Sua Escala Operacional de Hoje</span>
+              {routine.isSextaFeira && (
+                <span className="text-amber-400 font-extrabold">⚡ Sexta (Pico de Coco)</span>
+              )}
+            </div>
+            <div className="text-slate-200 leading-relaxed">
+              {currentUser.nome === 'Rita' && (
+                <p>
+                  🧹 <strong>5 Postos de Limpeza:</strong> Área de circulação de clientes, Área de produção, Banheiros, Estoque e Lavagem do material de produção.
+                </p>
+              )}
+              {currentUser.nome === 'Bianca' && (
+                <p>
+                  🧹 <strong>Limpeza:</strong> Caixa registrador e Balcão | 🤝 <strong>Reposição:</strong> Auxílio fixo no Expositor C com {routine.responsavelContagemNome}.
+                </p>
+              )}
+              {currentUser.nome === 'Vanessa' && (
+                <p>
+                  ❄️ <strong>Freezers:</strong> Verificação diária de temperatura (-18°C), congelados, polpas e validades.
+                </p>
+              )}
+              {currentUser.nome === 'Charles' && (
+                <p>
+                  🛒 <strong>Gestão de Compras:</strong> Levantamento de estoque e fechamento da Lista de Compras | 📊 <strong>Hortifrúti:</strong> {routine.responsavelContagemId === 'USR-01' ? 'Fez a contagem matinal e lidera o Expositor C.' : 'Acompanhamento de reposição.'}
+                </p>
+              )}
+              {(currentUser.nome === 'Lucas' || currentUser.nome === 'Rafael') && (
+                <div className="space-y-1">
+                  <p>
+                    🥥 <strong>Água de Coco na Garrafa:</strong> Meta de {routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros}L (Em dupla com {currentUser.nome === 'Lucas' ? 'Rafael' : 'Lucas'}, equilíbrio total de volume).
+                  </p>
+                  <p>
+                    🚚 <strong>Kombi:</strong> {routine.descargaKombi.responsavelNome === currentUser.nome ? 'Designado para descarga e conferência hoje!' : 'Auxílio na reposição geral de bancas.'}
+                  </p>
+                </div>
+              )}
+              {currentUser.nome === 'Adriana' && (
+                <p>
+                  🍎 <strong>Produção / Grab &amp; Go:</strong> Frutas descascadas, bandejas e saladas de frutas frescas do dia.
+                </p>
+              )}
+              {currentUser.nome === 'Amanda' && (
+                <p>
+                  📋 <strong>Gestão de Reposição:</strong> Supervisão do alinhamento visual de gôndolas e auxílio na produção.
+                </p>
+              )}
+              {currentUser.nome === 'Beto' && (
+                <p>
+                  👑 <strong>Direção Geral:</strong> Supervisão do padrão de qualidade, atendimento e rentabilidade da loja.
+                </p>
+              )}
             </div>
           </div>
         )}

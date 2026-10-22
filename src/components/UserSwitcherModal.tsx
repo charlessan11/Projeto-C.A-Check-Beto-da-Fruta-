@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, User as UserIcon, Plus, Check, ShieldAlert, Store, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, User as UserIcon, Plus, Check, ShieldAlert, Store, AlertCircle, Lock } from 'lucide-react';
 import { User, UserProfile } from '../types';
+import { AdminPinModal } from './AdminPinModal';
 
 interface UserSwitcherModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
   onSelectUser,
   onAddUser,
 }) => {
+  const [adminForPin, setAdminForPin] = useState<User | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [novoNome, setNovoNome] = useState('');
   const [novoEmail, setNovoEmail] = useState('');
@@ -58,6 +60,19 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
     setNovoEmail('');
   };
 
+  const handlePickUser = (u: User) => {
+    if (u.id === currentUser.id) {
+      onClose();
+      return;
+    }
+    if (u.perfil === 'Administrador') {
+      setAdminForPin(u);
+    } else {
+      onSelectUser(u);
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
@@ -89,7 +104,7 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
               Administrador
             </div>
             <p className="text-[11px] text-emerald-800 mt-1 leading-snug">
-              Gestão (Charles Araújo). CRUD total, prioridades, aprovação de compras, relatórios e prancheta.
+              Gestão (Charles, Amanda, Beto). Requer PIN de 4 dígitos. CRUD total, compras, relatórios.
             </p>
           </div>
 
@@ -99,7 +114,7 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
               Operacional
             </div>
             <p className="text-[11px] text-amber-800 mt-1 leading-snug">
-              Chão de Loja (Amanda, Marcos). Apenas baixa rápida, notas e sugestão de falta na gôndola.
+              Chão de Loja. Execução de tarefas, rotinas diárias e sugestão de falta na gôndola.
             </p>
           </div>
         </div>
@@ -113,10 +128,7 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
             return (
               <button
                 key={u.id}
-                onClick={() => {
-                  onSelectUser(u);
-                  onClose();
-                }}
+                onClick={() => handlePickUser(u)}
                 className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                   isSelected
                     ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-500/20'
@@ -234,6 +246,18 @@ export const UserSwitcherModal: React.FC<UserSwitcherModalProps> = ({
           </form>
         )}
       </div>
+
+      {/* Admin PIN authentication modal */}
+      <AdminPinModal
+        isOpen={!!adminForPin}
+        targetAdmin={adminForPin}
+        onClose={() => setAdminForPin(null)}
+        onSuccess={(admin) => {
+          setAdminForPin(null);
+          onSelectUser(admin);
+          onClose();
+        }}
+      />
     </div>
   );
 };

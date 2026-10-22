@@ -15,6 +15,7 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Encarregado de Reposição, Atendimento, Caixa',
     cargoDescricao: 'Encarregado Geral',
     avatarCor: 'bg-emerald-700 text-white',
+    pinCode: '1234',
   },
   {
     id: 'USR-02',
@@ -23,6 +24,7 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Gestão de Reposição, Auxílio em Produção',
     cargoDescricao: 'Gestão de Reposição',
     avatarCor: 'bg-teal-700 text-white',
+    pinCode: '1234',
   },
   {
     id: 'USR-03',
@@ -31,6 +33,7 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Proprietário, Reposição',
     cargoDescricao: 'Proprietário',
     avatarCor: 'bg-indigo-700 text-white',
+    pinCode: '1234',
   },
   {
     id: 'USR-04',
@@ -86,7 +89,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   nomeLoja: 'Beto da Fruta',
   gerenteResponsavel: 'Charles',
   proprietario: 'Beto',
-  horarioCheckinMatinal: '07:00',
+  horarioCheckinMatinal: '08:00',
   checkinAtivo: true,
   mensagemBoasVindas: 'Excelente turno de trabalho no Beto da Fruta! Mantenha o padrão de frescor e alinhamento visual da loja.',
 };
@@ -232,62 +235,108 @@ export const INITIAL_TASKS: Task[] = [
   },
 ];
 
-// Tabela 3: Compras_Reposicao (Simplificada com Mercadoria_Recebida e Reposicao_Concluida)
+// Tabela 3: Compras & Reposição (Fluxo Completo: Charles/Amanda -> WhatsApp/Impressão -> Lucas/Rafael Conferência -> Reposição de Banca)
 export const INITIAL_PURCHASES: PurchaseItem[] = [
   {
     id: 'ITEM-01',
     data: getTodayDateString(),
-    produto: 'Banana Prata Especial (Caixas)',
+    produto: 'Banana Prata Especial',
+    quantidadePedida: '12 cx',
+    fornecedor: 'Ceasa Box 14',
+    categoria: 'Frutas',
+    solicitadoPorNome: 'Charles',
+    solicitadoPorId: 'USR-01',
+    enviadoWhatsapp: true,
+    dataEnvioWhatsapp: new Date(Date.now() - 3600000 * 18).toISOString(),
     mercadoriaRecebida: true,
+    quantidadeRecebida: '12 cx',
+    statusConferencia: 'Entregue Completo',
+    conferidoPorNome: 'Lucas',
+    conferidoPorId: 'USR-04',
+    dataConferencia: new Date(Date.now() - 3600000 * 3).toISOString(),
     reposicaoConcluida: true,
-    solicitadoPorNome: 'Lucas',
-    solicitadoPorId: 'USR-04',
-    dataAtualizacao: new Date(Date.now() - 3600000 * 3).toISOString(),
-    observacao: 'Banca abastecida com 12 caixas.',
+    quantidadeReposta: '8 cx na banca / 4 cx câmara',
+    repostoPorNome: 'Lucas',
+    repostoPorId: 'USR-04',
+    dataReposicao: new Date(Date.now() - 3600000 * 2.5).toISOString(),
+    dataAtualizacao: new Date(Date.now() - 3600000 * 2.5).toISOString(),
+    observacao: 'Banca abastecida nobremente. Sobra de 4 caixas organizada na câmara.',
   },
   {
     id: 'ITEM-02',
     data: getTodayDateString(),
     produto: 'Abacaxi Pérola para Grab & Go',
+    quantidadePedida: '30 un',
+    fornecedor: 'Sítio Primavera',
+    categoria: 'Frutas',
+    solicitadoPorNome: 'Amanda',
+    solicitadoPorId: 'USR-02',
+    enviadoWhatsapp: true,
+    dataEnvioWhatsapp: new Date(Date.now() - 3600000 * 16).toISOString(),
     mercadoriaRecebida: true,
+    quantidadeRecebida: '30 un',
+    statusConferencia: 'Entregue Completo',
+    conferidoPorNome: 'Rafael',
+    conferidoPorId: 'USR-05',
+    dataConferencia: new Date(Date.now() - 3600000 * 2).toISOString(),
     reposicaoConcluida: false,
-    solicitadoPorNome: 'Adriana',
-    solicitadoPorId: 'USR-07',
     dataAtualizacao: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-    observacao: 'Chegou do caminhão, aguardando descarregar na produção.',
+    observacao: 'Chegou na loja, aguardando descarregar na produção Grab & Go.',
   },
   {
     id: 'ITEM-03',
     data: getTodayDateString(),
     produto: 'Morango Especial em bandeja 250g',
-    mercadoriaRecebida: false,
+    quantidadePedida: '20 bandejas',
+    fornecedor: 'Distribuidora Frutix',
+    categoria: 'Frutas',
+    solicitadoPorNome: 'Charles',
+    solicitadoPorId: 'USR-01',
+    enviadoWhatsapp: true,
+    dataEnvioWhatsapp: new Date(Date.now() - 3600000 * 15).toISOString(),
+    mercadoriaRecebida: true,
+    quantidadeRecebida: '15 bandejas',
+    statusConferencia: 'Entrega Parcial / Falta',
+    conferidoPorNome: 'Lucas',
+    conferidoPorId: 'USR-04',
+    dataConferencia: new Date(Date.now() - 3600000 * 2.8).toISOString(),
+    motivoDivergencia: 'Fornecedor entregou apenas 15 bandejas por falta de colheita.',
     reposicaoConcluida: false,
-    solicitadoPorNome: 'Bianca',
-    solicitadoPorId: 'USR-06',
     dataAtualizacao: new Date(Date.now() - 3600000 * 0.8).toISOString(),
-    observacao: 'Falta total na banca de frutas vermelhas.',
+    observacao: 'Falta repor na banca de frutas vermelhas.',
   },
   {
     id: 'ITEM-04',
     data: getTodayDateString(),
     produto: 'Filme PVC Alimentício 400m',
+    quantidadePedida: '4 rolos',
+    fornecedor: 'Distribuidora de Embalagens',
+    categoria: 'Embalagens',
+    solicitadoPorNome: 'Amanda',
+    solicitadoPorId: 'USR-02',
+    enviadoWhatsapp: false,
     mercadoriaRecebida: false,
+    statusConferencia: 'Pendente',
     reposicaoConcluida: false,
-    solicitadoPorNome: 'Vanessa',
-    solicitadoPorId: 'USR-08',
     dataAtualizacao: new Date(Date.now() - 3600000 * 2).toISOString(),
-    observacao: 'Resta apenas 1 rolo em uso na área de corte.',
+    observacao: 'Urgente: resta apenas 1 rolo em uso na área de corte.',
   },
   {
     id: 'ITEM-05',
     data: getTodayDateString(),
     produto: 'Tomate Italiano Comercial',
-    mercadoriaRecebida: true,
-    reposicaoConcluida: true,
+    quantidadePedida: '15 cx',
+    fornecedor: 'Ceasa Box 32',
+    categoria: 'Legumes',
     solicitadoPorNome: 'Charles',
     solicitadoPorId: 'USR-01',
+    enviadoWhatsapp: true,
+    dataEnvioWhatsapp: new Date(Date.now() - 3600000 * 14).toISOString(),
+    mercadoriaRecebida: false,
+    statusConferencia: 'Pendente',
+    reposicaoConcluida: false,
     dataAtualizacao: new Date(Date.now() - 3600000 * 4).toISOString(),
-    observacao: 'Recebido e reposto na abertura da loja.',
+    observacao: 'Pedido enviado para chegada matinal com nota fiscal.',
   },
 ];
 
@@ -304,7 +353,23 @@ export const loadUsers = (): User[] => {
       localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
       return INITIAL_USERS;
     }
-    return parsed;
+    // Ensure each admin has their individual pinCode initialized
+    let updated = false;
+    const usersWithPin = parsed.map((u) => {
+      if (u.perfil === 'Administrador') {
+        const storedIndividualPin = localStorage.getItem(`betodafruta_pin_${u.id}`);
+        const effectivePin = storedIndividualPin || u.pinCode || '1234';
+        if (u.pinCode !== effectivePin) {
+          u.pinCode = effectivePin;
+          updated = true;
+        }
+      }
+      return u;
+    });
+    if (updated) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(usersWithPin));
+    }
+    return usersWithPin;
   } catch {
     return INITIAL_USERS;
   }
@@ -312,6 +377,38 @@ export const loadUsers = (): User[] => {
 
 export const saveUsers = (users: User[]): void => {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+};
+
+export const getUserPin = (userId: string): string => {
+  const individualPin = localStorage.getItem(`betodafruta_pin_${userId}`);
+  if (individualPin) return individualPin;
+  const users = loadUsers();
+  const user = users.find((u) => u.id === userId);
+  return user?.pinCode || '1234';
+};
+
+export const updateUserPin = (userId: string, newPin: string): boolean => {
+  if (!newPin || newPin.trim().length !== 4) return false;
+  const cleanPin = newPin.trim();
+  // Save to isolated individual storage key
+  localStorage.setItem(`betodafruta_pin_${userId}`, cleanPin);
+
+  // Also update in users list for that specific user only
+  const users = loadUsers();
+  const updatedUsers = users.map((u) => {
+    if (u.id === userId) {
+      return { ...u, pinCode: cleanPin };
+    }
+    return u;
+  });
+  saveUsers(updatedUsers);
+
+  // Update currentUser if currently logged in
+  const current = loadCurrentUser();
+  if (current && current.id === userId) {
+    saveCurrentUser({ ...current, pinCode: cleanPin });
+  }
+  return true;
 };
 
 export const loadCurrentUser = (): User | null => {
@@ -370,10 +467,34 @@ export const loadPurchases = (): PurchaseItem[] => {
       return INITIAL_PURCHASES;
     }
     const parsed: PurchaseItem[] = JSON.parse(raw);
-    // If old format detected without mercadoriaRecebida, reset to simplified format
-    if (parsed.length > 0 && typeof parsed[0].mercadoriaRecebida === 'undefined') {
+    if (!Array.isArray(parsed) || parsed.length === 0) {
       localStorage.setItem(PURCHASES_KEY, JSON.stringify(INITIAL_PURCHASES));
       return INITIAL_PURCHASES;
+    }
+
+    // Upgrade items that miss new fields (quantidadePedida, fornecedor)
+    const hasMissingFields = parsed.some((p) => !p.quantidadePedida || !p.fornecedor);
+    if (hasMissingFields) {
+      const upgraded = parsed.map((item, idx) => {
+        const fallback = INITIAL_PURCHASES[idx % INITIAL_PURCHASES.length] || INITIAL_PURCHASES[0];
+        return {
+          ...item,
+          quantidadePedida: item.quantidadePedida || fallback.quantidadePedida || '10 cx',
+          fornecedor: item.fornecedor || fallback.fornecedor || 'Ceasa Box 14',
+          categoria: item.categoria || fallback.categoria || 'Frutas',
+          statusConferencia:
+            item.statusConferencia || (item.mercadoriaRecebida ? 'Entregue Completo' : 'Pendente'),
+          quantidadeRecebida:
+            item.quantidadeRecebida ||
+            (item.mercadoriaRecebida ? item.quantidadePedida || fallback.quantidadePedida || '10 cx' : undefined),
+          conferidoPorNome:
+            item.conferidoPorNome || (item.mercadoriaRecebida ? (idx % 2 === 0 ? 'Lucas' : 'Rafael') : undefined),
+          conferidoPorId:
+            item.conferidoPorId || (item.mercadoriaRecebida ? (idx % 2 === 0 ? 'USR-04' : 'USR-05') : undefined),
+        };
+      });
+      localStorage.setItem(PURCHASES_KEY, JSON.stringify(upgraded));
+      return upgraded;
     }
     return parsed;
   } catch {
@@ -393,6 +514,11 @@ export const loadSettings = (): StoreSettings => {
       return INITIAL_SETTINGS;
     }
     const parsed = JSON.parse(raw);
+    // Automatically migrate previous default 07:00 to new standard 08:00
+    if (parsed.horarioCheckinMatinal === '07:00') {
+      parsed.horarioCheckinMatinal = '08:00';
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...INITIAL_SETTINGS, ...parsed }));
+    }
     return { ...INITIAL_SETTINGS, ...parsed };
   } catch {
     return INITIAL_SETTINGS;
