@@ -1,0 +1,6 @@
+{
+  "name": "Beto da Fruta - Gestão de Atividades e Compras",
+  "description": "Sistema de gestão de rotinas operacionais, priorização GTD/Eisenhower e compras simplificadas para o hortifrúti Beto da Fruta.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

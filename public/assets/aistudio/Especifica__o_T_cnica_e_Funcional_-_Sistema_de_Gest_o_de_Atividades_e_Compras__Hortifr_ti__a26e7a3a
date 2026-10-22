@@ -1,0 +1,157 @@
+﻿Especificação Técnica e Funcional: Sistema de Gestão de Atividades e Compras (Hortifrúti)
+Responsável pelo Projeto: Charles Araújo
+Objetivo do Sistema: Centralizar a gestão de rotinas operacionais, priorização de tarefas (baseada em Matriz de Eisenhower e GTD - Regra dos 2 Minutos) e controle de reposição/compras do hortifrúti, permitindo uso híbrido (digital no celular/tablet e impresso em prancheta física).
+1. Perfis de Acesso e Permissões de Usuário
+O sistema trabalha com dois níveis hierárquicos de acesso estritos, identificados pelo e-mail ou login do usuário:
+1.1. Perfil Administrador (Gestão / Encarregado)
+Visão estratégica e controle total sobre os dados e rotinas da loja.
+
+
+* Criar, Editar e Excluir Tarefas: Permissão total (CRUD) para lançar atividades avulsas ou rotinas diárias.
+* Definir Prioridades e Categorias: Classificar o nível de urgência e determinar se a tarefa é uma atividade padrão ou uma "Micro-Ação de 2 Minutos".
+* Delegar Responsáveis: Atribuir tarefas específicas para colaboradores (ex: Amanda) ou setores.
+* Gestão de Compras: Cadastrar faltas, aprovar listas de compras, gerenciar fornecedores e alterar o status de pedidos (Planejado, Solicitado, Recebido).
+* Geração de Relatórios e Impressão: Acionar o botão gerador de PDF para imprimir a folha de rosto/checklist físico do dia.
+* Auditoria: Visualizar quem concluiu cada atividade e o horário exato da baixa.
+1.2. Perfil Operacional (Equipe de Loja)
+Interface limpa, focada exclusivamente na execução rápida no chão de loja, sem distrações ou risco de exclusão acidental de dados.
+
+
+* Visualização Filtrada: Enxerga apenas as tarefas pendentes atribuídas ao seu usuário ou ao seu turno/setor no dia atual.
+* Bloqueio de Edição Estrutural: Não pode apagar tarefas, alterar títulos, mudar prazos ou modificar o nível de prioridade definido pela gestão.
+* Ação Rápida (Quick Check): Botão único para marcar a atividade como "Concluída" ou "Em Andamento".
+* Observações de Execução: Permissão apenas para adicionar comentários rápidos em uma tarefa (ex: "Não consegui repor completo pois faltou embalagem").
+* Sugestão de Compra (Opcional): Pode adicionar um item em falta na lista de compras apenas com o status inicial "Sugerido/Falta na Gôndola", que ficará aguardando aprovação do Administrador.
+2. Módulo de Gestão de Atividades e Tempo
+As tarefas são organizadas para evitar que a equipe "apague incêndios" o dia todo, mantendo o fluxo contínuo da loja.
+2.1. Classificação por Tempo: A Regra dos 2 Minutos (GTD)
+O sistema separa visualmente as tarefas em duas filas distintas:
+
+
+1. Atividades Padrão (Macro-Tarefas): Rotinas que exigem foco e tempo contínuo (ex: Montar a estação Grab & Go, Cortar e embalar abacaxi temperado, Conferir carga de verduras).
+2. Fila de 2 Minutos (Micro-Ações): Tarefas ultrarrápidas que ficam em uma aba/seção destacada no topo ou rodapé do app.
+   * Regra de Negócio: Sempre que o colaborador finalizar uma Atividade Padrão, o sistema (e o treinamento operacional) orienta que ele olhe a Fila de 2 Minutos e execute imediatamente o que estiver ali antes de iniciar a próxima tarefa grande.
+   * Exemplos: Trocar uma etiqueta caída, retirar uma caixa vazia do corredor, responder confirmação rápida de entrega no WhatsApp.
+2.2. Matriz de Priorização (Ordem de Execução)
+Toda atividade cadastrada recebe um peso que define sua posição na tela da equipe:
+
+
+* 1 - Crítica / Urgente (Fazer Imediatamente): Ruptura de produto principal na banca logo cedo, recebimento de perecíveis no sol, falha em balança/caixa.
+* 2 - Alta (Fazer no Turno Atual): Preparação de produtos de alto giro, limpeza de seção, organização de estoque de câmara fria.
+* 3 - Média (Planejado do Dia): Reposição secundária, precificação geral, organização de depósito.
+* 4 - Baixa (Quando Houver Janela): Melhorias visuais não urgentes, contagem preventiva de insumos secundários.
+3. Módulo de Compras e Reposição
+Integrado à rotina da loja para garantir que nenhuma falta percebida durante a reposição seja esquecida.
+
+
+* Registro de Demanda (Alerta de Ruptura): Cadastro rápido do item que está acabando na banca ou no estoque (Produto, Quantidade Estimada, Categoria).
+* Vinculação a Fornecedores: Agrupamento dos itens por fornecedor ou dia de compra (ex: Feira/CEASA, Embalagens, Laticínios/Outros).
+* Fluxo de Status do Pedido:
+   1. Falta Identificada (Lançado na revisão de loja)
+   2. Em Cotação / Aprovado (Revisado pelo Charles)
+   3. Pedido Enviado (Solicitado ao fornecedor)
+   4. Entregue e Conferido (Mercadoria deu entrada na loja -> Gera automaticamente uma tarefa operacional de "Conferir e Repor [Produto]").
+4. Módulo de Impressão (Checklist Físico / Prancheta)
+Como na operação de hortifrúti os colaboradores muitas vezes estão com as mãos úmidas ou ocupadas manuseando frutas e verduras, o sistema conta com a função de Espelhamento em Papel.
+4.1. Funcionamento da Função de Impressão
+* Seleção Automática: O Administrador clica no botão "Gerar Folha do Dia". O sistema filtra todas as tarefas com data de hoje (TODAY()) e status A Fazer.
+* Layout do Documento Gerado (PDF/Impressão):
+   * Cabeçalho: Nome da Loja, Data do Dia, Turno e Espaço para Assinatura do Encarregado.
+   * Bloco 1 - Micro-Ações Rápidas (2 Minutos): Lista no topo da folha com caixas de seleção [  ] para serem riscadas rapidamente nos intervalos.
+   * Bloco 2 - Atividades Prioritárias por Setor: Agrupadas por categoria (Frente de Loja, Produção/Grab & Go, Estoque, Limpeza) e ordenadas da prioridade Crítica para a Baixa.
+   * Colunas da Tabela Impressa:
+      * [  ] (Checkbox para marcar à caneta)
+      * Prioridade (Indicador visual: [!] Crítica, [A] Alta, [M] Média)
+      * Descrição da Atividade
+      * Responsável
+      * Hora Concluída / Rubrica (Espaço em branco para o funcionário assinar quando terminar)
+   * Bloco 3 - Rascunho de Faltas/Compras: Um quadro com linhas em branco no rodapé da folha chamado "Faltou na Banca / Anotar para Compra", onde a equipe pode anotar à caneta produtos que acabaram durante a correria para o Administrador lançar no sistema ao final do turno.
+5. Estrutura de Dados Recomendada (Tabelas Base)
+Para construir no Google Studio / AppSheet / Banco de Dados, utilize esta estrutura de colunas:
+Tabela 1: Usuarios
+Nome da Coluna
+	Tipo de Dado
+	Descrição / Exemplo
+	ID_Usuario
+	Texto (Único)
+	Identificador exclusivo do usuário
+	Nome
+	Texto
+	Nome de exibição (ex: Charles, Amanda)
+	Email
+	Email
+	Login e controle de acesso por RLS
+	Perfil
+	Lista
+	Enum: Administrador, Operacional
+	Setor_Padrao
+	Texto
+	Setor principal (ex: Gerência, Frente de Loja, Produção)
+	Tabela 2: Atividades
+Nome da Coluna
+	Tipo de Dado
+	Descrição / Exemplo
+	ID_Tarefa
+	Texto (Único)
+	Código identificador gerado automaticamente
+	Data_Programada
+	Data
+	Data prevista para execução
+	Titulo_Atividade
+	Texto Curto
+	Descrição resumida da ação
+	Instrucoes_Detalhadas
+	Texto Longo
+	Orientações passo a passo
+	Tipo_Tempo
+	Lista
+	Enum: Tarefa Padrão, 2 Minutos (Fazer na Transição)
+	Prioridade
+	Lista
+	Enum: 1-Crítica, 2-Alta, 3-Média, 4-Baixa
+	Categoria
+	Lista
+	Enum: Reposição de Banca, Produção / Grab & Go, Qualidade / Validade, Limpeza, Administrativo
+	Responsavel
+	Referência
+	Chave estrangeira ligada à tabela Usuarios
+	Status
+	Lista
+	Enum: Pendente, Em Andamento, Concluída
+	Data_Hora_Conclusao
+	Data/Hora
+	Timestamp automático ao mudar para Concluída
+	Observacao_Operacional
+	Texto
+	Campo de notas preenchido pelo executor
+	Incluir_Na_Impressao
+	Booleano
+	Sim/Não (Padrão: Sim)
+	Tabela 3: Compras_Reposicao
+Nome da Coluna
+	Tipo de Dado
+	Descrição / Exemplo
+	ID_Item
+	Texto (Único)
+	Código identificador da solicitação
+	Data_Solicitacao
+	Data
+	Data em que a falta foi registrada
+	Produto
+	Texto
+	Nome do produto em falta
+	Quantidade_Sugerida
+	Texto / Número
+	Quantidade necessária para reposição
+	Unidade
+	Lista
+	Enum: Caixa, Kg, Unidade, Fardo, Pacote
+	Fornecedor
+	Texto
+	Parceiro comercial ou origem da compra
+	Urgencia_Compra
+	Lista
+	Enum: Compra do Dia, Compra da Semana, Estoque de Segurança
+	Status_Compra
+	Lista
+	Enum: Sugerido, Aprovado, Comprado, Recebido
