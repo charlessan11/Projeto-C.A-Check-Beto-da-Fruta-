@@ -31,6 +31,7 @@ import {
 import { PurchaseItem, User, StoreSettings, PurchaseStatusConferencia } from '../types';
 import { PurchaseWhatsAppModal } from './PurchaseWhatsAppModal';
 import { PurchasePrintModal } from './PurchasePrintModal';
+import { PurchaseAiImportModal } from './PurchaseAiImportModal';
 
 interface PurchaseListProps {
   purchases: PurchaseItem[];
@@ -43,6 +44,7 @@ interface PurchaseListProps {
   settings?: StoreSettings;
   onUpdatePurchase?: (item: PurchaseItem) => void;
   onSavePurchases?: (items: PurchaseItem[]) => void;
+  onBatchAddPurchases?: (newItems: PurchaseItem[]) => void;
 }
 
 export const PurchaseList: React.FC<PurchaseListProps> = ({
@@ -62,6 +64,7 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
   },
   onUpdatePurchase,
   onSavePurchases,
+  onBatchAddPurchases,
 }) => {
   const isAdmin = currentUser.perfil === 'Administrador';
 
@@ -78,7 +81,8 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
     currentUser.nome.includes('Rafael') ? 'Rafael' : 'Lucas'
   );
 
-  // Modals for WhatsApp and Printing
+  // Modals for AI, WhatsApp and Printing
+  const [isAiImportModalOpen, setIsAiImportModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
@@ -305,6 +309,15 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
           {/* Action Buttons for Charles & Amanda */}
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
+              onClick={() => setIsAiImportModalOpen(true)}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 text-emerald-950 font-black rounded-2xl text-xs flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
+              title="Importar lista de compras colada do WhatsApp ou arquivo .txt com Inteligência Artificial"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-950 fill-emerald-950" />
+              <span>✨ Importar c/ IA (WhatsApp)</span>
+            </button>
+
+            <button
               onClick={() => setIsWhatsAppModalOpen(true)}
               className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
               title="Enviar pedidos formatados por WhatsApp para fornecedores ou grupo"
@@ -338,23 +351,25 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
         {/* Etapa 1: Lista de Compras */}
         <button
           onClick={() => setActiveSubTab('compras')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`min-h-[80px] p-4 rounded-2xl border text-left transition-all active:scale-[0.99] cursor-pointer ${
             activeSubTab === 'compras'
-              ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200 shadow-xs'
-              : 'bg-white border-slate-200 hover:border-slate-300'
+              ? 'bg-[#0a3821] text-white border-[#0a3821] shadow-md'
+              : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-              <ShoppingBag className="w-4 h-4 text-emerald-600" />
+            <span className={`text-xs font-bold flex items-center gap-1.5 ${activeSubTab === 'compras' ? 'text-white' : 'text-slate-900'}`}>
+              <ShoppingBag className={`w-4 h-4 ${activeSubTab === 'compras' ? 'text-emerald-300' : 'text-emerald-700'}`} />
               1. Lista de Compras
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              activeSubTab === 'compras' ? 'bg-emerald-900 text-emerald-100 border border-emerald-700' : 'bg-slate-100 text-slate-700'
+            }`}>
               Charles &amp; Amanda
             </span>
           </div>
-          <div className="text-2xl font-black text-emerald-950 mt-1.5">{totalPurchases}</div>
-          <div className="text-[11px] text-slate-500">
+          <div className={`text-2xl font-black mt-1.5 ${activeSubTab === 'compras' ? 'text-white' : 'text-[#0a3821]'}`}>{totalPurchases}</div>
+          <div className={`text-[11px] ${activeSubTab === 'compras' ? 'text-emerald-100' : 'text-slate-500'}`}>
             {aguardandoChegadaCount} aguardando chegada do fornecedor
           </div>
         </button>
@@ -362,23 +377,25 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
         {/* Etapa 2: Conferência de Chegada */}
         <button
           onClick={() => setActiveSubTab('conferencia')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`min-h-[80px] p-4 rounded-2xl border text-left transition-all active:scale-[0.99] cursor-pointer ${
             activeSubTab === 'conferencia'
-              ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200 shadow-xs'
-              : 'bg-white border-slate-200 hover:border-slate-300'
+              ? 'bg-[#0a3821] text-white border-[#0a3821] shadow-md'
+              : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-              <Truck className="w-4 h-4 text-amber-600" />
+            <span className={`text-xs font-bold flex items-center gap-1.5 ${activeSubTab === 'conferencia' ? 'text-white' : 'text-slate-900'}`}>
+              <Truck className={`w-4 h-4 ${activeSubTab === 'conferencia' ? 'text-emerald-300' : 'text-emerald-700'}`} />
               2. Conferência de Chegada
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              activeSubTab === 'conferencia' ? 'bg-emerald-900 text-emerald-100 border border-emerald-700' : 'bg-slate-100 text-slate-700'
+            }`}>
               Lucas &amp; Rafael
             </span>
           </div>
-          <div className="text-2xl font-black text-amber-950 mt-1.5">{recebidosNaLojaCount}/{totalPurchases}</div>
-          <div className="text-[11px] text-slate-500">
+          <div className={`text-2xl font-black mt-1.5 ${activeSubTab === 'conferencia' ? 'text-white' : 'text-[#0a3821]'}`}>{recebidosNaLojaCount}/{totalPurchases}</div>
+          <div className={`text-[11px] ${activeSubTab === 'conferencia' ? 'text-emerald-100' : 'text-slate-500'}`}>
             Tabela comparativa: o que pediu vs o que chegou
           </div>
         </button>
@@ -386,23 +403,25 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
         {/* Etapa 3: Estoque & Reposição de Banca */}
         <button
           onClick={() => setActiveSubTab('reposicao')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`min-h-[80px] p-4 rounded-2xl border text-left transition-all active:scale-[0.99] cursor-pointer ${
             activeSubTab === 'reposicao'
-              ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-200 shadow-xs'
-              : 'bg-white border-slate-200 hover:border-slate-300'
+              ? 'bg-[#0a3821] text-white border-[#0a3821] shadow-md'
+              : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-rose-600" />
+            <span className={`text-xs font-bold flex items-center gap-1.5 ${activeSubTab === 'reposicao' ? 'text-white' : 'text-slate-900'}`}>
+              <Layers className={`w-4 h-4 ${activeSubTab === 'reposicao' ? 'text-emerald-300' : 'text-emerald-700'}`} />
               3. Reposição &amp; Sobra
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              activeSubTab === 'reposicao' ? 'bg-emerald-900 text-emerald-100 border border-emerald-700' : 'bg-slate-100 text-slate-700'
+            }`}>
               Estoque da Loja
             </span>
           </div>
-          <div className="text-2xl font-black text-rose-950 mt-1.5">{faltaReporCount}</div>
-          <div className="text-[11px] text-slate-500">
+          <div className={`text-2xl font-black mt-1.5 ${activeSubTab === 'reposicao' ? 'text-white' : 'text-[#0a3821]'}`}>{faltaReporCount}</div>
+          <div className={`text-[11px] ${activeSubTab === 'reposicao' ? 'text-emerald-100' : 'text-slate-500'}`}>
             {faltaReporCount === 1 ? 'Produto falta repor na banca' : 'Produtos que faltam repor na banca'}
           </div>
         </button>
@@ -471,13 +490,21 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                 Itens lançados com Nome, Quantidade e Fornecedor prontos para cotação e envio
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setIsAiImportModalOpen(true)}
+                className="px-3 py-1.5 bg-[#0a3821] hover:bg-emerald-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Colar texto do WhatsApp e processar com IA"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+                <span>✨ Importar c/ IA</span>
+              </button>
               <button
                 onClick={() => setIsWhatsAppModalOpen(true)}
                 className="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
                 <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Enviar p/ WhatsApp</span>
+                <span>WhatsApp</span>
               </button>
               <button
                 onClick={() => setIsPrintModalOpen(true)}
@@ -589,30 +616,32 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
       {activeSubTab === 'conferencia' && (
         <div className="space-y-4">
           {/* Top Checker Selector & Bulk Action */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/80 p-4 rounded-2xl border border-amber-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-amber-700" />
-                <h3 className="font-black text-sm text-amber-950">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Truck className="w-5 h-5 text-emerald-800" />
+                </div>
+                <h3 className="font-black text-sm text-slate-900">
                   Tabela Comparativa: O Que Foi Pedido vs O Que Chegou na Loja
                 </h3>
               </div>
-              <p className="text-xs text-amber-900 mt-0.5">
+              <p className="text-xs text-slate-500 mt-1">
                 Conferência física feita por Lucas ou Rafael no descarregamento das mercadorias
               </p>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Checker Switcher */}
-              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-amber-300">
+              {/* Checker Switcher (Large touch buttons) */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
                 <span className="text-[11px] font-bold text-slate-600 px-1">Conferente:</span>
                 <button
                   type="button"
                   onClick={() => setActiveChecker('Lucas')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     activeChecker === 'Lucas'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      ? 'bg-[#0a3821] text-white shadow-2xs'
+                      : 'text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   Lucas
@@ -620,10 +649,10 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveChecker('Rafael')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     activeChecker === 'Rafael'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      ? 'bg-[#0a3821] text-white shadow-2xs'
+                      : 'text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   Rafael
@@ -633,18 +662,158 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
               {aguardandoChegadaCount > 0 && (
                 <button
                   onClick={handleQuickReceiveAll}
-                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="min-h-[44px] px-4 py-2 bg-[#0a3821] hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-xs active:scale-[0.98] cursor-pointer"
                   title="Marcar todos os itens pendentes como entregues 100% conforme o pedido"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
                   <span>Chegou Tudo Conforme Pedido</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Comparison Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Banner de Uso Duplo da Folha Física Impressa */}
+          <div className="bg-emerald-50/90 border border-emerald-200 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800 text-white flex items-center justify-center shrink-0">
+                <Printer className="w-4 h-4 text-emerald-200" />
+              </div>
+              <div>
+                <span className="font-black text-emerald-950 text-xs sm:text-sm block">
+                  Conferência Física com o Mesmo Papel Impresso da Kombi:
+                </span>
+                <span className="text-emerald-900 text-[11px] leading-tight block mt-0.5">
+                  Charles levou a folha ao Ceasa e {activeChecker} confere o descarregamento no mesmo impresso antes de registrar no app.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(true)}
+                className="min-h-[38px] px-3.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Visualizar ou reimprimir a planilha de prancheta A4 de uso duplo"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Reimprimir Prancheta A4</span>
+              </button>
+              {aguardandoChegadaCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleQuickReceiveAll}
+                  className="min-h-[38px] px-3.5 bg-[#0a3821] hover:bg-emerald-800 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  title="Dar baixa completa em todos os itens conforme conferido no papel impresso"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>✓ Tudo Conforme o Impresso</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* DEDICATED MOBILE CARDS VIEW (block md:hidden) - Zero horizontal scroll, big thumb touch targets */}
+          <div className="block md:hidden space-y-3">
+            {filteredItems.map((item) => {
+              const status = item.statusConferencia || (item.mercadoriaRecebida ? 'Entregue Completo' : 'Pendente');
+
+              return (
+                <div key={item.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-bold">{item.id}</span>
+                        <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                          {item.fornecedor || 'Ceasa Box 14'}
+                        </span>
+                      </div>
+                      <h4 className="text-base font-black text-slate-900">{item.produto}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Pedido por: {item.solicitadoPorNome} • {item.categoria || 'Geral'}</p>
+                    </div>
+
+                    {status === 'Entrega Parcial / Falta' ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
+                        ⚠ Entrega Parcial
+                      </span>
+                    ) : item.mercadoriaRecebida ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 shrink-0">
+                        ✓ Entregue
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 shrink-0">
+                        Pendente
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Quantities comparison */}
+                  <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div>
+                      <span className="text-[11px] text-slate-500 block mb-0.5">O que pediu:</span>
+                      <span className="font-mono font-bold text-slate-900 text-sm">{item.quantidadePedida || '10 cx'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-500 block mb-0.5">O que chegou na loja:</span>
+                      {item.mercadoriaRecebida ? (
+                        <span className="font-mono font-bold text-emerald-800 text-sm">
+                          {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
+                        </span>
+                      ) : (
+                        <span className="font-bold text-rose-600 text-sm italic">Aguardando entrega</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {item.motivoDivergencia && (
+                    <p className="text-xs text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                      <strong>Motivo da divergência:</strong> {item.motivoDivergencia}
+                    </p>
+                  )}
+
+                  {item.conferidoPorNome && (
+                    <p className="text-xs text-slate-600">
+                      Conferido por: <strong className="text-emerald-900 font-bold">{item.conferidoPorNome}</strong>
+                    </p>
+                  )}
+
+                  {/* Large Full-Width Action Buttons (>= 48px) */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {!item.mercadoriaRecebida ? (
+                      <button
+                        onClick={() => handleQuickReceiveItem(item)}
+                        className="flex-1 min-h-[48px] bg-[#0a3821] hover:bg-emerald-800 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>✓ Chegou Tudo ({activeChecker})</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onToggleRecebida(item.id, true)}
+                        className="flex-1 min-h-[48px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                      >
+                        Reverter Recebimento
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setEditingConferenceItem(item);
+                        setConfRecebidaInput(item.quantidadeRecebida || item.quantidadePedida || '10 cx');
+                        setConfDivergenciaInput(item.motivoDivergencia || '');
+                      }}
+                      className="min-h-[48px] px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      title="Anotar quantidade diferente ou divergência"
+                    >
+                      <Edit className="w-4 h-4 text-slate-600" />
+                      <span>Falta / Sobra</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP COMPARISON TABLE (hidden md:block) */}
+          <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
@@ -652,7 +821,7 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                     <th className="p-3">Produto &amp; Categoria</th>
                     <th className="p-3">Fornecedor</th>
                     <th className="p-3 text-center">O Que Foi Pedido</th>
-                    <th className="p-3 text-center bg-amber-50/70">O Que Chegou na Loja</th>
+                    <th className="p-3 text-center bg-emerald-50/50">O Que Chegou na Loja</th>
                     <th className="p-3 text-center">Status / Divergência</th>
                     <th className="p-3 text-center">Conferido Por</th>
                     <th className="p-3 text-right">Ação Rápida</th>
@@ -685,7 +854,7 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                         </td>
 
                         {/* O que chegou na loja */}
-                        <td className="p-3 text-center bg-amber-50/30">
+                        <td className="p-3 text-center bg-emerald-50/30">
                           {item.mercadoriaRecebida ? (
                             <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-950 font-mono font-bold text-xs border border-emerald-300">
                               {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
@@ -746,7 +915,7 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                             {!item.mercadoriaRecebida ? (
                               <button
                                 onClick={() => handleQuickReceiveItem(item)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
+                                className="min-h-[38px] px-3 py-1.5 bg-[#0a3821] hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-[0.98] cursor-pointer shadow-2xs"
                                 title={`Marcar que chegou tudo conforme pedido conferido por ${activeChecker}`}
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -755,7 +924,7 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                             ) : (
                               <button
                                 onClick={() => onToggleRecebida(item.id, true)}
-                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                className="min-h-[38px] px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer"
                                 title="Desmarcar recebimento"
                               >
                                 Reverter
@@ -768,10 +937,10 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                                 setConfRecebidaInput(item.quantidadeRecebida || item.quantidadePedida || '10 cx');
                                 setConfDivergenciaInput(item.motivoDivergencia || '');
                               }}
-                              className="p-1.5 text-slate-500 hover:text-amber-800 rounded-lg hover:bg-amber-50 cursor-pointer"
+                              className="p-2 text-slate-500 hover:text-emerald-900 rounded-xl hover:bg-slate-100 cursor-pointer"
                               title="Anotar quantidade diferente ou divergência"
                             >
-                              <Edit className="w-3.5 h-3.5" />
+                              <Edit className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -792,47 +961,47 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
               <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-emerald-600" />
+                <Package className="w-4 h-4 text-emerald-700" />
                 Estoque Recebido na Loja
               </div>
               <div className="text-2xl font-black text-slate-900 mt-1">{recebidosNaLojaCount} itens</div>
-              <div className="text-[11px] text-slate-500">Produtos físicos já conferidos</div>
+              <div className="text-[11px] text-slate-500">Produtos físicos já conferidos na loja</div>
             </div>
 
-            <div className="p-4 bg-rose-50 rounded-2xl border border-rose-300 shadow-xs ring-2 ring-rose-200">
-              <div className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-rose-600" />
-                🔴 O QUE FALTA REPÔR NA BANCA
+            <div className="p-4 bg-white rounded-2xl border-2 border-[#0a3821] shadow-xs">
+              <div className="text-xs font-bold text-[#0a3821] flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-emerald-800" />
+                Falta Repor na Banca
               </div>
-              <div className="text-2xl font-black text-rose-950 mt-1">{faltaReporCount} produtos</div>
-              <div className="text-[11px] text-rose-800 font-semibold">
-                Estoque na loja aguardando abastecimento de banca
+              <div className="text-2xl font-black text-[#0a3821] mt-1">{faltaReporCount} produtos</div>
+              <div className="text-[11px] text-slate-600 font-semibold">
+                Mercadorias na loja aguardando abastecer a banca
               </div>
             </div>
 
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-300 shadow-xs">
-              <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+            <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
+              <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 Banca Abastecida (Reposto)
               </div>
-              <div className="text-2xl font-black text-emerald-950 mt-1">{reposicaoConcluidaCount} produtos</div>
+              <div className="text-2xl font-black text-slate-900 mt-1">{reposicaoConcluidaCount} produtos</div>
               <div className="text-[11px] text-emerald-800 font-semibold">
                 Produtos prontos no salão de vendas
               </div>
             </div>
           </div>
 
-          {/* Sub-filtros de Reposição */}
-          <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-2">
+          {/* Sub-filtros de Reposição (Large Touch Targets) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-slate-700">Visualizar Estoque:</span>
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
                 <button
                   type="button"
                   onClick={() => setReposicaoSubFilter('falta_repor')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     reposicaoSubFilter === 'falta_repor'
-                      ? 'bg-rose-600 text-white shadow-2xs'
+                      ? 'bg-[#0a3821] text-white shadow-2xs'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
@@ -841,9 +1010,9 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                 <button
                   type="button"
                   onClick={() => setReposicaoSubFilter('reposto')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     reposicaoSubFilter === 'reposto'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      ? 'bg-[#0a3821] text-white shadow-2xs'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
@@ -852,105 +1021,182 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
                 <button
                   type="button"
                   onClick={() => setReposicaoSubFilter('todos')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     reposicaoSubFilter === 'todos'
-                      ? 'bg-slate-800 text-white shadow-2xs'
+                      ? 'bg-[#0a3821] text-white shadow-2xs'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  Todos Recebidos ({recebidosNaLojaCount})
+                  Todos ({recebidosNaLojaCount})
                 </button>
               </div>
             </div>
 
-            <div className="text-xs text-slate-500 font-medium hidden sm:block">
-              Marque o checkbox quando o produto for colocado na banca do salão
+            <div className="text-xs text-slate-500 font-medium">
+              Toque no botão para marcar que colocou na banca
             </div>
           </div>
 
           {/* Lista de Reposição */}
           {filteredItems.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500">
-              <PackageCheck className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-              <p className="text-sm font-bold text-slate-700">
+              <PackageCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-800">
                 {reposicaoSubFilter === 'falta_repor'
                   ? 'Parabéns! Todas as mercadorias recebidas já foram repostas na banca.'
                   : 'Nenhum produto encontrado nesta categoria.'}
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
-              {filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                    item.reposicaoConcluida
-                      ? 'bg-emerald-50/40'
-                      : 'bg-rose-50/20 hover:bg-rose-50/40'
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                        {item.id}
+            <div className="space-y-3">
+              {/* MOBILE CARDS VIEW (block md:hidden) */}
+              <div className="block md:hidden space-y-3">
+                {filteredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                      item.reposicaoConcluida
+                        ? 'bg-slate-50 border-slate-200 opacity-80'
+                        : 'bg-white border-slate-300 shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                            {item.id}
+                          </span>
+                          <span className="text-xs font-bold text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md font-mono">
+                            Estoque: {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
+                          </span>
+                        </div>
+                        <h4
+                          className={`text-base font-black ${
+                            item.reposicaoConcluida ? 'line-through text-slate-400' : 'text-slate-900'
+                          }`}
+                        >
+                          {item.produto}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          Fornecedor: <strong className="text-slate-800">{item.fornecedor || 'Ceasa Box 14'}</strong>
+                        </p>
+                      </div>
+
+                      <span
+                        className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                          item.reposicaoConcluida ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {item.reposicaoConcluida ? '✓ Na Banca' : 'Falta Repor'}
                       </span>
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">
-                        Qtd em Estoque: {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
-                      </span>
-                      <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                        Fornecedor: <strong className="text-slate-800">{item.fornecedor || 'Ceasa Box 14'}</strong>
-                      </span>
-                      {item.conferidoPorNome && (
-                        <span className="text-[11px] text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">
-                          Conferido por: {item.conferidoPorNome}
+                    </div>
+
+                    {item.observacaoReposicao && (
+                      <p className="text-xs text-emerald-950 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                        <strong>Sobra / Obs:</strong> {item.observacaoReposicao}
+                      </p>
+                    )}
+
+                    {/* Full-width touch action button (>= 48px) */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => handleQuickToggleReposicao(item)}
+                        className={`flex-1 min-h-[48px] rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer ${
+                          item.reposicaoConcluida
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                            : 'bg-[#0a3821] hover:bg-emerald-800 text-white shadow-xs'
+                        }`}
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{item.reposicaoConcluida ? '✓ Reposto na Banca (Reverter)' : '✓ Marcar como Reposto na Banca'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setEditingReposicaoItem(item);
+                          setReposicaoObsInput(item.observacaoReposicao || '');
+                        }}
+                        className="min-h-[48px] px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                        title="Anotar sobra de estoque na câmara ou observação"
+                      >
+                        <Edit className="w-4 h-4 text-slate-600" />
+                        <span>Sobra</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP ROW VIEW (hidden md:block) */}
+              <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs divide-y divide-slate-100">
+                {filteredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-4 flex items-center justify-between gap-4 transition-colors ${
+                      item.reposicaoConcluida ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50/80'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          {item.id}
                         </span>
+                        <span className="text-xs font-bold text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md font-mono">
+                          Qtd em Estoque: {item.quantidadeRecebida || item.quantidadePedida || '10 cx'}
+                        </span>
+                        <span className="text-xs text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md">
+                          Fornecedor: <strong className="text-slate-800">{item.fornecedor || 'Ceasa Box 14'}</strong>
+                        </span>
+                        {item.conferidoPorNome && (
+                          <span className="text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
+                            Conferido por: {item.conferidoPorNome}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4
+                        className={`text-base font-black ${
+                          item.reposicaoConcluida ? 'line-through text-slate-400' : 'text-slate-900'
+                        }`}
+                      >
+                        {item.produto}
+                      </h4>
+
+                      {item.observacaoReposicao && (
+                        <p className="text-xs text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                          Sobra de estoque / Observação: {item.observacaoReposicao}
+                        </p>
                       )}
                     </div>
 
-                    <h4
-                      className={`text-base font-black ${
-                        item.reposicaoConcluida
-                          ? 'line-through text-slate-400'
-                          : 'text-slate-900'
-                      }`}
-                    >
-                      {item.produto}
-                    </h4>
+                    {/* Checklist Button: Reposto na Banca */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => handleQuickToggleReposicao(item)}
+                        className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 active:scale-[0.98] transition-all cursor-pointer ${
+                          item.reposicaoConcluida
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                            : 'bg-[#0a3821] hover:bg-emerald-800 text-white shadow-xs'
+                        }`}
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{item.reposicaoConcluida ? '✓ Reposto na Banca' : 'Marcar como Reposto'}</span>
+                      </button>
 
-                    {item.observacaoReposicao && (
-                      <p className="text-xs text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        Sobra de estoque / Observação: {item.observacaoReposicao}
-                      </p>
-                    )}
+                      <button
+                        onClick={() => {
+                          setEditingReposicaoItem(item);
+                          setReposicaoObsInput(item.observacaoReposicao || '');
+                        }}
+                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl cursor-pointer"
+                        title="Anotar sobra de estoque na câmara ou observação"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-
-                  {/* Checklist Button: Reposto na Banca */}
-                  <div className="flex items-center gap-3 shrink-0">
-                    <button
-                      onClick={() => handleQuickToggleReposicao(item)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                        item.reposicaoConcluida
-                          ? 'bg-emerald-600 text-white shadow-xs hover:bg-emerald-700'
-                          : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20'
-                      }`}
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>{item.reposicaoConcluida ? '✓ Reposto na Banca' : 'Marcar como Reposto'}</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setEditingReposicaoItem(item);
-                        setReposicaoObsInput(item.observacaoReposicao || '');
-                      }}
-                      className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl cursor-pointer"
-                      title="Anotar sobra de estoque na câmara ou observação"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1103,6 +1349,24 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Import Modal (WhatsApp & .txt) */}
+      <PurchaseAiImportModal
+        isOpen={isAiImportModalOpen}
+        onClose={() => setIsAiImportModalOpen(false)}
+        currentUser={currentUser}
+        existingSuppliers={suppliers}
+        onConfirmImport={(newItems, openPrint) => {
+          if (onBatchAddPurchases) {
+            onBatchAddPurchases(newItems);
+          } else if (onSavePurchases) {
+            onSavePurchases([...newItems, ...purchases]);
+          }
+          if (openPrint) {
+            setIsPrintModalOpen(true);
+          }
+        }}
+      />
 
       {/* WhatsApp Modal */}
       <PurchaseWhatsAppModal

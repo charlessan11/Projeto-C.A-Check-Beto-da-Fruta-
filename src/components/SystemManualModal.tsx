@@ -312,30 +312,35 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200">
                   <span className="text-[10px] font-black uppercase text-emerald-800 block mb-1">
-                    Fase 1: Pedido &amp; Cotação
+                    Fase 1: Pedido, Cotação &amp; IA
                   </span>
                   <h4 className="font-bold text-slate-900 mb-1">Charles ou Amanda</h4>
                   <p className="text-slate-600 text-[11px] leading-relaxed">
-                    Lançamento de Produto, Quantidade com unidade (cx, kg, un, sacos, fardos) e Fornecedor/Box.
+                    Lançamento de Produto, Quantidade com unidade (cx, kg, un, sc, maços) e Fornecedor/Box.
                   </p>
                   <div className="mt-2 pt-2 border-t border-emerald-200 flex flex-col gap-1 text-[11px]">
-                    <span className="text-emerald-900 font-semibold">• Envio por WhatsApp formatado</span>
-                    <span className="text-emerald-900 font-semibold">• Impressão de Ordem de Compra A4</span>
+                    <span className="text-emerald-950 font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                      Importação com IA (WhatsApp / .txt)
+                    </span>
+                    <span className="text-emerald-900 font-semibold">• Quantidade antes do produto (ex: 10 cx Tomate)</span>
+                    <span className="text-emerald-900 font-semibold">• Detecção e preenchimento ágil de itens sem quantidade/fornecedor</span>
+                    <span className="text-emerald-900 font-bold">• 📋 Planilha A4 de Prancheta para Uso Duplo</span>
                   </div>
                 </div>
 
                 <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200">
                   <span className="text-[10px] font-black uppercase text-amber-800 block mb-1">
-                    Fase 2: Conferência de Chegada
+                    Fase 2: Conferência Física &amp; Descarregamento
                   </span>
                   <h4 className="font-bold text-slate-900 mb-1">Lucas ou Rafael</h4>
                   <p className="text-slate-600 text-[11px] leading-relaxed">
-                    Tabela comparativa em tempo real: <em>O que foi pedido</em> vs <em>O que chegou na loja</em>.
+                    Uso da <strong>mesma folha impressa trazida da Kombi</strong> para ticar as mercadorias que chegaram contra o que foi pedido.
                   </p>
                   <div className="mt-2 pt-2 border-t border-amber-200 flex flex-col gap-1 text-[11px]">
-                    <span className="text-amber-900 font-semibold">• Botão "Chegou Tudo Conforme Pedido"</span>
-                    <span className="text-amber-900 font-semibold">• Registro de faltas e avarias</span>
-                    <span className="text-amber-900 font-semibold">• Selo com visto e horário do conferente</span>
+                    <span className="text-amber-900 font-bold">• Visto físico e baixa com 1 toque no app</span>
+                    <span className="text-amber-900 font-semibold">• Registro de divergências e avarias</span>
+                    <span className="text-amber-900 font-semibold">• Tabela comparativa pedido vs entregue</span>
                   </div>
                 </div>
 

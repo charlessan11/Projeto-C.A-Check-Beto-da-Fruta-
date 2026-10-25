@@ -387,70 +387,70 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner: Date, Friday Alert, Progress & Quick Actions */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+      <div className="bg-[#0a3821] text-white rounded-2xl border border-emerald-950/40 p-5 sm:p-6 shadow-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-900/90 text-emerald-100 border border-emerald-700/60">
                 <Calendar className="w-3.5 h-3.5" />
                 Rotina Diária Obrigatória
               </span>
               {routine.isSextaFeira && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-500 text-white animate-pulse shadow-xs">
-                  <Flame className="w-3.5 h-3.5" />
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-amber-400 text-emerald-950 animate-pulse shadow-xs">
+                  <Flame className="w-3.5 h-3.5 fill-current" />
                   Sexta-feira (Pico de Coco)
                 </span>
               )}
               {isAdmin && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-emerald-100 border border-white/20">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
                   Modo Administrador
                 </span>
               )}
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 capitalize">
+            <h2 className="text-2xl sm:text-3xl font-black text-white capitalize tracking-tight">
               {formattedDate}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Gestão de atividades, balanceamento justo e conformidade do Hortifrúti Beto da Fruta
+            <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-2xl">
+              Gestão de atividades, balanceamento justo e conformidade operacional do Hortifrúti Beto da Fruta
             </p>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Quick Action Buttons (Large Touch Targets >= 44px) */}
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={onSyncWithTasks}
               type="button"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors cursor-pointer"
+              className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-[0.98] transition-all cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Sincronizar c/ Quadro Geral
+              <RefreshCw className="w-4 h-4" />
+              Sincronizar c/ Quadro
             </button>
             <button
               onClick={onOpenPrintModal}
               type="button"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-xs transition-colors cursor-pointer"
+              className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-xs active:scale-[0.98] transition-all cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-4 h-4" />
               Imprimir Folha A4
             </button>
           </div>
         </div>
 
         {/* Global Progress Bar */}
-        <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-bold text-slate-700 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="mt-5 pt-4 border-t border-emerald-800/60">
+          <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
+            <span className="font-bold text-emerald-100 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-300" />
               Progresso Geral das Rotinas do Dia
             </span>
-            <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+            <span className="font-mono font-bold text-white bg-emerald-900/90 border border-emerald-700/60 px-3 py-0.5 rounded-lg">
               {completedItems}/{totalItems} ({progressPct}%)
             </span>
           </div>
-          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+          <div className="w-full h-3 bg-emerald-950/70 rounded-full overflow-hidden p-0.5 border border-emerald-800/40">
             <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all duration-500"
+              className="h-full bg-gradient-to-r from-emerald-400 to-emerald-200 rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -706,8 +706,8 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
-                <Store className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                <Store className="w-5 h-5 text-emerald-800" />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">2. Atendimento ao Balcão</h3>
@@ -723,9 +723,9 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 onClick={handleRerollBalcao}
                 type="button"
                 title="Sortear outro funcionário disponível aleatoriamente"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer"
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
               >
-                <Shuffle className="w-3.5 h-3.5" />
+                <Shuffle className="w-4 h-4 text-emerald-700" />
                 Sortear
               </button>
             )}
@@ -733,14 +733,14 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
           {/* Admin Selection Controls for Atendente Balcão */}
           {isAdmin ? (
-            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-700" />
+                <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
                   Escolha do Atendente (Controle do Administrador)
                 </label>
-                <span className="text-[10px] text-blue-700 font-semibold">
-                  Escolha manual ou sorteio
+                <span className="text-[10px] text-emerald-700 font-semibold">
+                  Manual ou sorteio
                 </span>
               </div>
 
@@ -748,7 +748,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 <select
                   value={routine.atendimentoBalcao.responsavelId}
                   onChange={(e) => handleSelectBalcaoUser(e.target.value)}
-                  className="flex-1 text-xs font-bold text-slate-900 bg-white border border-blue-300 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="min-h-[44px] flex-1 text-xs font-bold text-slate-900 bg-white border border-emerald-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
@@ -760,25 +760,25 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 <button
                   onClick={handleRerollBalcao}
                   type="button"
-                  className="px-3 py-2 rounded-lg text-xs font-bold text-blue-800 bg-white hover:bg-blue-100 border border-blue-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                 >
-                  <Shuffle className="w-3.5 h-3.5 text-blue-600" />
+                  <Shuffle className="w-4 h-4 text-emerald-700" />
                   Sortear Aleatório
                 </button>
               </div>
 
               {/* Quick Staff Shortcuts */}
               <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
-                <span className="text-[11px] font-semibold text-blue-800">Atalhos rápidos:</span>
+                <span className="text-[11px] font-semibold text-emerald-900">Atalhos rápidos:</span>
                 {users.slice(0, 5).map((u) => (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => handleSelectBalcaoUser(u.id)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors cursor-pointer ${
+                    className={`min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
                       routine.atendimentoBalcao.responsavelId === u.id
-                        ? 'bg-blue-700 text-white border-blue-700'
-                        : 'bg-white text-blue-900 border-blue-200 hover:bg-blue-100'
+                        ? 'bg-[#0a3821] text-white border-[#0a3821]'
+                        : 'bg-white text-emerald-900 border-emerald-200 hover:bg-emerald-50'
                     }`}
                   >
                     {u.nome.split(' ')[0]}
@@ -787,48 +787,48 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
               </div>
             </div>
           ) : (
-            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
               <span className="font-semibold text-slate-700">Designação do Atendimento:</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[11px]">
-                <ShieldCheck className="w-3 h-3 text-blue-600" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-xs">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
                 Definido pela Administração
               </span>
             </div>
           )}
 
-          {/* Active Attendant Card */}
+          {/* Active Attendant Card (Large touch target >= 56px) */}
           <div
             onClick={handleToggleBalcao}
-            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+            className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
               routine.atendimentoBalcao.concluido
                 ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-blue-50/50 border-blue-200 hover:border-blue-300'
+                : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+              <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
                 Responsável Ativo no Balcão Hoje
               </span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                className={`px-3 py-1 rounded-full text-xs font-bold ${
                   routine.atendimentoBalcao.concluido
                     ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
+                    : 'bg-[#0a3821] text-white'
                 }`}
               >
                 {routine.atendimentoBalcao.concluido ? '✓ Atendimento Concluído' : 'Em Atendimento'}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-blue-600 text-white font-black text-lg flex items-center justify-center shadow-xs">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-[#0a3821] text-white font-black text-lg flex items-center justify-center shadow-xs shrink-0">
                 {routine.atendimentoBalcao.responsavelNome.slice(0, 2).toUpperCase()}
               </div>
               <div>
                 <h4 className="text-base font-bold text-slate-900">
                   {routine.atendimentoBalcao.responsavelNome}
                 </h4>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-slate-600 mt-0.5">
                   Dupla atribuição: Realiza atendimento cordial aos clientes no balcão e faz reposição contínua.
                 </p>
               </div>
@@ -850,8 +850,8 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
-                <Brush className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                <Brush className="w-5 h-5 text-emerald-800" />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">3. Limpeza Diária de Setores</h3>
@@ -862,17 +862,17 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
                 {routine.limpezas.filter((l) => l.concluido).length}/{routine.limpezas.length} Feitos
               </span>
               {isAdmin && (
                 <button
                   onClick={() => setShowAddLimpeza(!showAddLimpeza)}
                   type="button"
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-300 transition-colors cursor-pointer"
+                  className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
                   title="Adicionar nova área de limpeza (Administrador)"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4 text-emerald-700" />
                   Adicionar Área
                 </button>
               )}
@@ -883,17 +883,17 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
           {isAdmin && showAddLimpeza && (
             <form
               onSubmit={handleConfirmAddLimpeza}
-              className="p-3.5 bg-purple-50/80 border border-purple-300 rounded-xl space-y-3 animate-in fade-in"
+              className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
                   Cadastrar Nova Área de Limpeza
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowAddLimpeza(false)}
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -910,7 +910,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                     placeholder="Ex: Calçada Externa, Câmara Fria"
                     value={newLimpezaArea}
                     onChange={(e) => setNewLimpezaArea(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -920,7 +920,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   <select
                     value={newLimpezaRespId}
                     onChange={(e) => setNewLimpezaRespId(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -935,13 +935,13 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddLimpeza(false)}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1 rounded-lg text-xs font-bold bg-purple-700 text-white hover:bg-purple-800 shadow-xs cursor-pointer"
+                  className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
                 >
                   Salvar Área
                 </button>
@@ -949,43 +949,37 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
             </form>
           )}
 
-          {/* Limpezas List */}
+          {/* Limpezas List (Large touch targets >= 44px) */}
           <div className="space-y-2">
             {routine.limpezas.map((lmp) => (
               <div
                 key={lmp.id}
                 onClick={() => handleToggleLimpeza(lmp.id)}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                className={`min-h-[46px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
                   lmp.concluido
-                    ? 'bg-purple-50/60 border-purple-300'
-                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs ${
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                       lmp.concluido
-                        ? 'bg-purple-700 text-white'
+                        ? 'bg-[#0a3821] text-white'
                         : 'border-2 border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     ✓
                   </div>
-                  <span className="text-xs font-semibold text-slate-800">{lmp.area}</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-900">{lmp.area}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                      lmp.responsavelNome === 'Rita'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
+                  <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-800">
                     {lmp.responsavelNome}
                   </span>
                   <span
-                    className={`text-[10px] font-semibold ${
-                      lmp.concluido ? 'text-purple-700 font-bold' : 'text-slate-400'
+                    className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                      lmp.concluido ? 'text-emerald-800 bg-emerald-100' : 'text-slate-500 bg-slate-100'
                     }`}
                   >
                     {lmp.concluido ? 'Limpo' : 'Pendente'}
@@ -995,9 +989,9 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                       onClick={(e) => handleDeleteLimpeza(lmp.id, e)}
                       type="button"
                       title="Excluir esta área de limpeza (Admin)"
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -1010,8 +1004,8 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center font-bold">
-                <Thermometer className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                <Thermometer className="w-5 h-5 text-emerald-800" />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">4. Verificação dos Freezers — Atividades (Vanessa)</h3>
@@ -1022,17 +1016,17 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
-                {freezerItems.filter((f) => f.concluido).length}/{freezerItems.length} Concluídas
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
+                {freezerItems.filter((f) => f.concluido).length}/{freezerItems.length} Feitas
               </span>
               {isAdmin && (
                 <button
                   onClick={() => setShowAddFreezer(!showAddFreezer)}
                   type="button"
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 transition-colors cursor-pointer"
+                  className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
                   title="Adicionar nova atividade de verificação dos freezers (Administrador)"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4 text-emerald-700" />
                   Adicionar Atividade
                 </button>
               )}
@@ -1043,11 +1037,11 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
           {isAdmin && showAddFreezer && (
             <form
               onSubmit={handleConfirmAddFreezer}
-              className="p-3.5 bg-rose-50/80 border border-rose-300 rounded-xl space-y-3 animate-in fade-in"
+              className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-rose-700" />
+                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
                   Cadastrar Nova Atividade de Verificação dos Freezers
                 </span>
                 <button
@@ -1070,7 +1064,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                     placeholder="Ex: Checagem de vedação e acúmulo de gelo"
                     value={newFreezerAtividade}
                     onChange={(e) => setNewFreezerAtividade(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -1082,7 +1076,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                     placeholder="Ex: -18°C ou Rotação PEPS"
                     value={newFreezerTemp}
                     onChange={(e) => setNewFreezerTemp(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -1092,7 +1086,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   <select
                     value={newFreezerRespId}
                     onChange={(e) => setNewFreezerRespId(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -1107,13 +1101,13 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddFreezer(false)}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-800 shadow-xs cursor-pointer"
+                  className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
                 >
                   Salvar Atividade
                 </button>
@@ -1121,30 +1115,30 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
             </form>
           )}
 
-          {/* Freezer Activities List */}
+          {/* Freezer Activities List (Large touch targets >= 44px) */}
           <div className="space-y-2.5">
             {freezerItems.map((frz) => (
               <div
                 key={frz.id}
                 onClick={() => handleToggleFreezersItem(frz.id)}
-                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                className={`min-h-[48px] p-3.5 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
                   frz.concluido
                     ? 'bg-emerald-50/70 border-emerald-300'
-                    : 'bg-rose-50/40 border-rose-200 hover:border-rose-300'
+                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                       frz.concluido
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-[#0a3821] text-white'
                         : 'border-2 border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     ✓
                   </div>
                   <div>
-                    <h4 className="font-bold text-xs text-slate-900">{frz.atividade || frz.nome}</h4>
+                    <h4 className="font-bold text-xs sm:text-sm text-slate-900">{frz.atividade || frz.nome}</h4>
                     <p className="text-[11px] text-slate-600">
                       Responsável: <strong className="text-slate-800">{frz.responsavelNome}</strong>
                       {frz.observacoes && ` • ${frz.observacoes}`}
@@ -1154,15 +1148,15 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
                 <div className="flex items-center gap-2 shrink-0">
                   {frz.temperaturaAferida && (
-                    <span className="text-xs font-mono font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono font-bold text-emerald-950 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded">
                       {frz.temperaturaAferida}
                     </span>
                   )}
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                       frz.concluido
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
+                        : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     {frz.concluido ? '✓ Realizada' : 'Pendente'}
@@ -1172,9 +1166,9 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                       onClick={(e) => handleDeleteFreezer(frz.id, e)}
                       type="button"
                       title="Excluir esta atividade da verificação dos freezers (Admin)"
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -1187,12 +1181,12 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center font-bold">
-                <Truck className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                <Truck className="w-5 h-5 text-emerald-800" />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
-                  5. Conferência & Descarga da Kombi
+                  5. Conferência &amp; Descarga da Kombi
                 </h3>
                 <p className="text-[11px] text-slate-500">Alternância entre Lucas ou Rafael</p>
               </div>
@@ -1200,7 +1194,7 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
             <button
               onClick={handleSwapKombiResponsavel}
               type="button"
-              className="text-xs font-bold text-sky-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+              className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all inline-flex items-center gap-1 cursor-pointer"
             >
               Trocar: {routine.descargaKombi.responsavelNome === 'Lucas' ? 'Rafael' : 'Lucas'}
             </button>
@@ -1208,10 +1202,10 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
           <div
             onClick={handleToggleKombi}
-            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+            className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
               routine.descargaKombi.concluido
                 ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-sky-50/40 border-sky-200 hover:border-sky-300'
+                : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
@@ -1219,24 +1213,24 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 <div
                   className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
                     routine.descargaKombi.concluido
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-[#0a3821] text-white'
                       : 'border-2 border-slate-300 bg-white text-transparent'
                   }`}
                 >
                   ✓
                 </div>
-                <span className="font-bold text-xs text-slate-900">
+                <span className="font-bold text-xs sm:text-sm text-slate-900">
                   Responsável: {routine.descargaKombi.responsavelNome}
                 </span>
               </div>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                className={`px-3 py-1 rounded-full text-xs font-bold ${
                   routine.descargaKombi.concluido
                     ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-sky-100 text-sky-800'
+                    : 'bg-[#0a3821] text-white'
                 }`}
               >
-                {routine.descargaKombi.concluido ? 'Descarregada' : 'Aguardando Chegada'}
+                {routine.descargaKombi.concluido ? '✓ Descarregada' : 'Aguardando Chegada'}
               </span>
             </div>
             <p className="text-xs text-slate-600 pl-8">
@@ -1249,8 +1243,8 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
-                <Droplets className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                <Droplets className="w-5 h-5 text-emerald-800" />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
@@ -1267,16 +1261,16 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                 onClick={handleSwapCocoResponsavel}
                 type="button"
                 title="Alternar responsável único pelo coco hoje"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-300 transition-colors cursor-pointer"
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
               >
-                <Shuffle className="w-3.5 h-3.5 text-teal-600" />
+                <Shuffle className="w-3.5 h-3.5 text-emerald-700" />
                 Alternar: {(routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome) === 'Lucas' ? 'Passar p/ Rafael' : 'Passar p/ Lucas'}
               </button>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                className={`px-3 py-1 rounded-full text-xs font-black ${
                   routine.isSextaFeira
-                    ? 'bg-amber-500 text-white animate-pulse'
-                    : 'bg-teal-100 text-teal-800'
+                    ? 'bg-amber-400 text-emerald-950 animate-pulse'
+                    : 'bg-[#0a3821] text-white'
                 }`}
               >
                 Meta: {routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros}L
@@ -1285,33 +1279,33 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
           </div>
 
           {/* Operational Rule Notice */}
-          <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
               <span>
                 <strong>Regra Operacional:</strong> A produção é feita exclusivamente por{' '}
                 <strong>1 funcionário</strong> (ou Lucas ou Rafael, nunca os dois no mesmo dia).
               </span>
             </div>
-            <span className="inline-flex items-center gap-1 font-bold text-teal-900 bg-white border border-amber-300 px-2.5 py-1 rounded-lg text-xs shrink-0 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1 font-bold text-emerald-950 bg-white border border-emerald-300 px-3 py-1.5 rounded-xl text-xs shrink-0 self-start sm:self-auto shadow-2xs">
               Responsável Único Hoje:{' '}
-              <strong className="text-teal-700">
+              <strong className="text-emerald-800">
                 {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
               </strong>
             </span>
           </div>
 
           {/* Target, Liters Input and Save */}
-          <div className="p-3.5 bg-teal-50/60 border border-teal-200 rounded-xl space-y-3">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-teal-950">
+              <span className="font-bold text-slate-800">
                 Escalado Hoje:{' '}
-                <strong>
+                <strong className="text-[#0a3821]">
                   {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
                 </strong>{' '}
                 (Atribuição Individual)
               </span>
-              <span className="font-mono text-teal-800 font-bold">
+              <span className="font-mono text-emerald-800 font-bold">
                 {coconutInput >= routine.aguaDeCoco.metaMinLitros ? '✓ Meta de Litros Atingida' : 'Em Produção'}
               </span>
             </div>
@@ -1324,49 +1318,49 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   max="150"
                   value={coconutInput}
                   onChange={(e) => setCoconutInput(Number(e.target.value))}
-                  className="w-full pl-3 pr-12 py-2 rounded-xl bg-white border border-teal-300 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="min-h-[44px] w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-white border border-slate-300 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="Litros produzidos"
                 />
-                <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">
+                <span className="absolute right-3.5 top-3 text-xs font-bold text-slate-400">
                   Litros
                 </span>
               </div>
               <button
                 onClick={handleSaveCocoLitros}
                 type="button"
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-xs transition-colors cursor-pointer shrink-0"
+                className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0a3821] hover:bg-emerald-800 text-white shadow-xs active:scale-[0.98] transition-all cursor-pointer shrink-0"
               >
                 Salvar Litragem
               </button>
             </div>
 
-            {/* 3 MANDATORY STAGES CHECKLIST */}
-            <div className="pt-2 border-t border-teal-200/60 space-y-2">
-              <span className="text-[11px] font-bold text-teal-950 uppercase tracking-wider block">
+            {/* 3 MANDATORY STAGES CHECKLIST (Large touch targets >= 48px) */}
+            <div className="pt-2 border-t border-slate-200 space-y-2.5">
+              <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider block">
                 Atividades Obrigatórias do Processo de Coco:
               </span>
 
               {/* Etapa 1: Produção na Garrafa */}
               <div
                 onClick={() => handleToggleCocoSubEtapa('garrafasEnvase')}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
                   cocoEtapas.garrafasEnvase
                     ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-teal-200 hover:border-teal-300'
+                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs ${
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                       cocoEtapas.garrafasEnvase
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-[#0a3821] text-white'
                         : 'border-2 border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     ✓
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">
                       1. Produção de água de coco na garrafa
                     </p>
                     <p className="text-[11px] text-slate-600">
@@ -1375,35 +1369,35 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    cocoEtapas.garrafasEnvase ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    cocoEtapas.garrafasEnvase ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {cocoEtapas.garrafasEnvase ? 'Concluído' : 'Pendente'}
+                  {cocoEtapas.garrafasEnvase ? '✓ Concluído' : 'Pendente'}
                 </span>
               </div>
 
               {/* Etapa 2: Corte e Retirada da Polpa */}
               <div
                 onClick={() => handleToggleCocoSubEtapa('corteERetiradaPolpa')}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
                   cocoEtapas.corteERetiradaPolpa
                     ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-teal-200 hover:border-teal-300'
+                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs ${
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                       cocoEtapas.corteERetiradaPolpa
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-[#0a3821] text-white'
                         : 'border-2 border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     ✓
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">
                       2. Cortes de coco para retirada da polpa
                     </p>
                     <p className="text-[11px] text-slate-600">
@@ -1412,35 +1406,35 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    cocoEtapas.corteERetiradaPolpa ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    cocoEtapas.corteERetiradaPolpa ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {cocoEtapas.corteERetiradaPolpa ? 'Concluído' : 'Pendente'}
+                  {cocoEtapas.corteERetiradaPolpa ? '✓ Concluído' : 'Pendente'}
                 </span>
               </div>
 
               {/* Etapa 3: Jogar o Lixo dos Cocos */}
               <div
                 onClick={() => handleToggleCocoSubEtapa('descarteLixoCocos')}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
                   cocoEtapas.descarteLixoCocos
                     ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-teal-200 hover:border-teal-300'
+                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs ${
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                       cocoEtapas.descarteLixoCocos
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-[#0a3821] text-white'
                         : 'border-2 border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     ✓
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">
                       3. Jogar o lixo dos cocos e limpeza da bancada
                     </p>
                     <p className="text-[11px] text-slate-600">
@@ -1449,34 +1443,34 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    cocoEtapas.descarteLixoCocos ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    cocoEtapas.descarteLixoCocos ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {cocoEtapas.descarteLixoCocos ? 'Concluído' : 'Pendente'}
+                  {cocoEtapas.descarteLixoCocos ? '✓ Concluído' : 'Pendente'}
                 </span>
               </div>
             </div>
 
             {/* Fair balance meter */}
-            <div className="pt-2 border-t border-teal-200/60 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] text-teal-900 font-bold">
+            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-emerald-950 font-bold">
                 <span className="flex items-center gap-1">
-                  <Award className="w-3.5 h-3.5 text-teal-600" />
+                  <Award className="w-4 h-4 text-emerald-700" />
                   Equilíbrio Lucas vs Rafael
                 </span>
-                <span>Ninguém faz mais que o outro</span>
+                <span className="text-slate-600">Ninguém faz mais que o outro</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-                <div className="p-2 rounded-lg bg-white border border-teal-200 flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
                   <span>Lucas:</span>
-                  <span className="font-bold text-teal-700 font-mono">
+                  <span className="font-bold text-[#0a3821] font-mono text-sm">
                     {routine.aguaDeCoco.saldoLucasLitros}L
                   </span>
                 </div>
-                <div className="p-2 rounded-lg bg-white border border-teal-200 flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
                   <span>Rafael:</span>
-                  <span className="font-bold text-teal-700 font-mono">
+                  <span className="font-bold text-[#0a3821] font-mono text-sm">
                     {routine.aguaDeCoco.saldoRafaelLitros}L
                   </span>
                 </div>

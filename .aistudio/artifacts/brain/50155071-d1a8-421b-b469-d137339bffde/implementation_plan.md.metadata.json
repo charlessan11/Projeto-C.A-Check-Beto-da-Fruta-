@@ -1,0 +1,6 @@
+{
+  "summary":  "Revisão do plano de implementação incorporando o modelo real de mensagem de WhatsApp da loja do Beto da Fruta (usado por Charles e Amanda), suportando frações (1/2cx, 1/2sc), asteriscos opcionais em categorias (Hortifruti, Bomboniere, Hortaliças), itens sem quantidade e sem unidade formal (1 Bola de Coentro, 5 Couve).",
+  "updatedAt":  "2026-10-25T10:26:27.652364461Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

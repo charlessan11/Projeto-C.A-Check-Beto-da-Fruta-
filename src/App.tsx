@@ -303,6 +303,15 @@ export default function App() {
     }
   };
 
+  const handleBatchAddPurchases = (newItems: PurchaseItem[]) => {
+    const updated = [...newItems, ...purchases];
+    handleSavePurchases(updated);
+    showToast(
+      `✨ ${newItems.length} produtos importados com IA!`,
+      'Itens inseridos com sucesso na Lista de Compras e prontos para conferência.'
+    );
+  };
+
   const handleDeletePurchase = (itemId: string) => {
     setConfirmDialog({
       isOpen: true,
@@ -515,6 +524,7 @@ export default function App() {
             onToggleRecebida={handleToggleRecebida}
             onToggleReposicao={handleToggleReposicao}
             onSavePurchases={handleSavePurchases}
+            onBatchAddPurchases={handleBatchAddPurchases}
             onUpdatePurchase={(item) => {
               const updated = purchases.map((p) => (p.id === item.id ? item : p));
               handleSavePurchases(updated);

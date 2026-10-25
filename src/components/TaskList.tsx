@@ -152,13 +152,13 @@ export const TaskList: React.FC<TaskListProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Search Box */}
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
             <input
               type="text"
               placeholder="Buscar por atividade, produto, instrução ou responsável..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm transition-all"
+              className="min-h-[44px] w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-slate-100/80 focus:bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm transition-all"
             />
           </div>
 
@@ -166,9 +166,9 @@ export const TaskList: React.FC<TaskListProps> = ({
           <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
             <button
               onClick={() => setDateFilter('hoje')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`min-h-[38px] px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                 dateFilter === 'hoje'
-                  ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                  ? 'bg-[#0a3821] text-white shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -176,9 +176,9 @@ export const TaskList: React.FC<TaskListProps> = ({
             </button>
             <button
               onClick={() => setDateFilter('amanha')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`min-h-[38px] px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                 dateFilter === 'amanha'
-                  ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                  ? 'bg-[#0a3821] text-white shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -186,9 +186,9 @@ export const TaskList: React.FC<TaskListProps> = ({
             </button>
             <button
               onClick={() => setDateFilter('todas')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`min-h-[38px] px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                 dateFilter === 'todas'
-                  ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                  ? 'bg-[#0a3821] text-white shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -201,19 +201,19 @@ export const TaskList: React.FC<TaskListProps> = ({
             {isAdmin && (
               <button
                 onClick={onAddTask}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors cursor-pointer"
+                className="min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 bg-[#0a3821] hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs active:scale-[0.98] transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4 text-emerald-300" />
                 <span>Nova Atividade</span>
               </button>
             )}
 
             <button
               onClick={onOpenPrintModal}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors cursor-pointer"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
               title="Visualizar e Imprimir Folha do Dia para a Prancheta"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-slate-600" />
               <span className="hidden sm:inline">Imprimir Prancheta</span>
             </button>
           </div>
@@ -407,9 +407,9 @@ export const TaskList: React.FC<TaskListProps> = ({
                       ) : (
                         <button
                           onClick={() => onQuickComplete(task)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                          className="min-h-[44px] px-3.5 py-2 bg-[#0a3821] hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs active:scale-[0.98] transition-all cursor-pointer"
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-4 h-4 text-emerald-300" />
                           <span>Concluir (2 min)</span>
                         </button>
                       )}
@@ -594,10 +594,10 @@ export const TaskList: React.FC<TaskListProps> = ({
                             {onStartPomodoro && (
                               <button
                                 onClick={() => onStartPomodoro(task)}
-                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                className="min-h-[44px] px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                 title="Iniciar Modo Pomodoro (25 min foco + 5 min GTD)"
                               >
-                                <Clock className="w-3.5 h-3.5 text-rose-600" />
+                                <Clock className="w-4 h-4 text-slate-500" />
                                 <span className="hidden md:inline">Pomodoro</span>
                               </button>
                             )}
@@ -605,20 +605,20 @@ export const TaskList: React.FC<TaskListProps> = ({
                             {!isInProgress && (
                               <button
                                 onClick={() => onStartTask(task.id)}
-                                className="px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-800 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                className="min-h-[44px] px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
                                 title="Marcar como Em Andamento"
                               >
-                                <Play className="w-3.5 h-3.5 fill-sky-800" />
+                                <Play className="w-3.5 h-3.5 fill-slate-800" />
                                 <span>Iniciar</span>
                               </button>
                             )}
 
                             <button
                               onClick={() => onQuickComplete(task)}
-                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                              className="min-h-[44px] px-4 py-2 bg-[#0a3821] hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs active:scale-[0.98] transition-all cursor-pointer"
                               title="Marcar como concluída e adicionar observação"
                             >
-                              <Check className="w-3.5 h-3.5" />
+                              <Check className="w-4 h-4 text-emerald-300" />
                               <span>Concluir</span>
                             </button>
                           </>
