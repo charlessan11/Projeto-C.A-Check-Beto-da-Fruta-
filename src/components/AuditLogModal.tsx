@@ -1,13 +1,24 @@
 import React, { useState, useMemo } from 'react';
-import { History, CheckCircle2, Search, Filter, Calendar, User as UserIcon, MessageSquare } from 'lucide-react';
+import {
+  History,
+  CheckCircle2,
+  Search,
+  Filter,
+  Calendar,
+  User as UserIcon,
+  MessageSquare,
+  Database,
+  Download,
+} from 'lucide-react';
 import { Task, User } from '../types';
 
 interface AuditLogViewProps {
   tasks: Task[];
   users: User[];
+  onOpenBackupModal?: () => void;
 }
 
-export const AuditLogView: React.FC<AuditLogViewProps> = ({ tasks, users }) => {
+export const AuditLogView: React.FC<AuditLogViewProps> = ({ tasks, users, onOpenBackupModal }) => {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<string>('todos');
 
@@ -56,9 +67,9 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ tasks, users }) => {
   return (
     <div className="space-y-6">
       {/* Banner */}
-      <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xs">
+      <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
             <History className="w-5 h-5" />
           </div>
           <div>
@@ -68,6 +79,18 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ tasks, users }) => {
             </p>
           </div>
         </div>
+
+        {onOpenBackupModal && (
+          <button
+            type="button"
+            onClick={onOpenBackupModal}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0"
+            title="Exportar arquivo JSON com todas as atividades e compras do dia"
+          >
+            <Download className="w-4 h-4 text-emerald-200" />
+            <span>Baixar Backup JSON do Dia</span>
+          </button>
+        )}
       </div>
 
       {/* Control bar */}

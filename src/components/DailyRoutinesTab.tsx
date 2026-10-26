@@ -4,6 +4,7 @@ import {
   RoutineExpositorAssignment,
   RoutineLimpezaItem,
   RoutineFreezerItem,
+  RoutineCustomItem,
   User,
 } from '../types';
 import {
@@ -20,6 +21,9 @@ import {
   addFreezerRoutineItem,
   deleteFreezerRoutineItem,
   toggleFreezerRoutineItem,
+  addCustomRoutineItem,
+  toggleCustomRoutineItem,
+  deleteCustomRoutineItem,
   saveDailyRoutine,
 } from '../services/routineEngine';
 import {
@@ -48,6 +52,7 @@ import {
   CheckSquare,
   Square,
   Scissors,
+  Users,
 } from 'lucide-react';
 
 interface DailyRoutinesTabProps {
@@ -72,6 +77,18 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
   const isAdmin = currentUser?.perfil === 'Administrador';
   const [coconutInput, setCoconutInput] = useState<number>(routine.aguaDeCoco.litrosProduzidos || 0);
 
+  // Filter state for Admin (collaborators are strictly locked to their own ID)
+  const [adminUserFilter, setAdminUserFilter] = useState<string>('todos');
+
+  // Management Add Custom Daily Routine Modal State
+  const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  const [customTitulo, setCustomTitulo] = useState('');
+  const [customRespId, setCustomRespId] = useState(users[0]?.id || 'USR-04');
+  const [customAuxId, setCustomAuxId] = useState('');
+  const [customCategoria, setCustomCategoria] = useState<string>('Reposição de Banca');
+  const [customObs, setCustomObs] = useState('');
+  const [customHorario, setCustomHorario] = useState('');
+
   // Admin inline form states: Expositor
   const [showAddExpositor, setShowAddExpositor] = useState(false);
   const [newExpositorNome, setNewExpositorNome] = useState('');
@@ -84,7 +101,6 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
   const [newLimpezaArea, setNewLimpezaArea] = useState('');
   const [newLimpezaRespId, setNewLimpezaRespId] = useState(users[0]?.id || 'USR-09');
 
-  // Admin inline form states: Freezer
   // Admin inline form states: Freezer Atividades
   const [showAddFreezer, setShowAddFreezer] = useState(false);
   const [newFreezerAtividade, setNewFreezerAtividade] = useState('');
@@ -92,6 +108,13 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
   const [newFreezerRespId, setNewFreezerRespId] = useState(
     users.find((u) => u.nome.includes('Vanessa'))?.id || users[0]?.id || 'USR-08'
   );
+
+  // In-app delete confirmation state (safe for iframe/mobile, no window.confirm)
+  const [pendingDelete, setPendingDelete] = useState<{
+    type: 'expositor' | 'limpeza' | 'freezer' | 'custom';
+    id: string;
+    label: string;
+  } | null>(null);
 
   // Active freezer activities list (focus on inspection activities, not appliances)
   const freezerItems: RoutineFreezerItem[] =
@@ -135,7 +158,9 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
           },
         ];
 
-  // Calculate overall completion stats
+  const extraRoutines = routine.rotinasExtras || [];
+
+  // Calculate overall completion stats (all team)
   const totalItems =
     1 + // contagem
     routine.expositores.length +
@@ -144,7 +169,8 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
     freezerItems.length +
     1 + // kombi
     1 + // agua coco
-    1; // lista compras
+    1 + // lista compras
+    extraRoutines.length;
 
   let completedItems = 0;
   if (routine.contagemConcluida) completedItems++;
@@ -155,8 +181,147 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
   if (routine.descargaKombi.concluido) completedItems++;
   if (routine.aguaDeCoco.concluido) completedItems++;
   if (routine.listaCompras.concluido) completedItems++;
+  extraRoutines.forEach((r) => r.concluido && completedItems++);
 
   const progressPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  // Operational Isolation: If not Admin, user strictly sees ONLY their own activities (as primary or auxiliary).
+  // If Admin, defaults to all, or filtered to a single collaborator.
+  const effectiveUserId: string | null = isAdmin
+    ? adminUserFilter === 'todos'
+      ? null
+      : adminUserFilter
+    : currentUser?.id || null;
+
+  // Helper to calculate total & completed routine items for any specific user
+  const getUserRoutineStats = (userId: string) => {
+    let userTotal = 0;
+    let userDone = 0;
+
+    // 1. Contagem
+    if (routine.responsavelContagemId === userId) {
+      userTotal++;
+      if (routine.contagemConcluida) userDone++;
+    }
+
+    // 2. Expositores (titular ou auxiliar)
+    routine.expositores.forEach((exp) => {
+      if (exp.responsavelId === userId || exp.auxiliarId === userId) {
+        userTotal++;
+        if (exp.concluido) userDone++;
+      }
+    });
+
+    // 3. Balcão
+    if (routine.atendimentoBalcao.responsavelId === userId) {
+      userTotal++;
+      if (routine.atendimentoBalcao.concluido) userDone++;
+    }
+
+    // 4. Limpezas
+    routine.limpezas.forEach((lmp) => {
+      if (lmp.responsavelId === userId) {
+        userTotal++;
+        if (lmp.concluido) userDone++;
+      }
+    });
+
+    // 5. Freezers
+    freezerItems.forEach((frz) => {
+      if (frz.responsavelId === userId || (!frz.responsavelId && routine.freezers.responsavelId === userId)) {
+        userTotal++;
+        if (frz.concluido) userDone++;
+      }
+    });
+
+    // 6. Kombi
+    if (routine.descargaKombi.responsavelId === userId) {
+      userTotal++;
+      if (routine.descargaKombi.concluido) userDone++;
+    }
+
+    // 7. Coco
+    if (
+      routine.aguaDeCoco.responsavelId === userId ||
+      routine.aguaDeCoco.responsavelPrincipalId === userId ||
+      routine.aguaDeCoco.auxiliarId === userId
+    ) {
+      userTotal++;
+      if (routine.aguaDeCoco.concluido) userDone++;
+    }
+
+    // 8. Compras
+    if (routine.listaCompras.responsavelId === userId) {
+      userTotal++;
+      if (routine.listaCompras.concluido) userDone++;
+    }
+
+    // 9. Rotinas Extras (titular ou auxiliar)
+    extraRoutines.forEach((cst) => {
+      if (cst.responsavelId === userId || cst.auxiliarId === userId) {
+        userTotal++;
+        if (cst.concluido) userDone++;
+      }
+    });
+
+    return { total: userTotal, completed: userDone };
+  };
+
+  const currentStats = effectiveUserId ? getUserRoutineStats(effectiveUserId) : null;
+  const currentProgressPct =
+    currentStats && currentStats.total > 0
+      ? Math.round((currentStats.completed / currentStats.total) * 100)
+      : 0;
+
+  // Section Filtering Flags
+  const showContagem = effectiveUserId === null || routine.responsavelContagemId === effectiveUserId;
+  const filteredExpositores = routine.expositores.filter(
+    (e) => effectiveUserId === null || e.responsavelId === effectiveUserId || e.auxiliarId === effectiveUserId
+  );
+  const showExpositoresCard = isAdmin || showContagem || filteredExpositores.length > 0;
+
+  const showBalcaoCard =
+    effectiveUserId === null || routine.atendimentoBalcao.responsavelId === effectiveUserId;
+
+  const filteredLimpezas = routine.limpezas.filter(
+    (l) => effectiveUserId === null || l.responsavelId === effectiveUserId
+  );
+  const showLimpezaCard = effectiveUserId === null || filteredLimpezas.length > 0;
+
+  const filteredFreezers = freezerItems.filter(
+    (f) =>
+      effectiveUserId === null ||
+      f.responsavelId === effectiveUserId ||
+      (!f.responsavelId && routine.freezers.responsavelId === effectiveUserId)
+  );
+  const showFreezersCard = effectiveUserId === null || filteredFreezers.length > 0;
+
+  const showKombiCard =
+    effectiveUserId === null || routine.descargaKombi.responsavelId === effectiveUserId;
+
+  const showCocoCard =
+    effectiveUserId === null ||
+    routine.aguaDeCoco.responsavelId === effectiveUserId ||
+    routine.aguaDeCoco.responsavelPrincipalId === effectiveUserId ||
+    routine.aguaDeCoco.auxiliarId === effectiveUserId;
+
+  const showComprasCard =
+    effectiveUserId === null || routine.listaCompras.responsavelId === effectiveUserId;
+
+  const filteredExtras = extraRoutines.filter(
+    (r) => effectiveUserId === null || r.responsavelId === effectiveUserId || r.auxiliarId === effectiveUserId
+  );
+  const showExtrasCard = isAdmin || filteredExtras.length > 0;
+
+  const hasAnyCardVisible =
+    showExpositoresCard ||
+    showBalcaoCard ||
+    showLimpezaCard ||
+    showFreezersCard ||
+    showKombiCard ||
+    showCocoCard ||
+    showComprasCard ||
+    showExtrasCard;
 
   // Format date in PT-BR
   const formattedDate = new Date(routine.data + 'T12:00:00').toLocaleDateString('pt-BR', {
@@ -325,10 +490,11 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
   const handleDeleteExpositor = (key: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Excluir o setor/expositor "${key}" da rotina diária?`)) {
-      const updated = deleteExpositorRoutine(routine, key);
-      onUpdateRoutine(updated);
-    }
+    setPendingDelete({
+      type: 'expositor',
+      id: key,
+      label: `Setor / Expositor "${key}"`,
+    });
   };
 
   // Limpeza
@@ -345,10 +511,12 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
   const handleDeleteLimpeza = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Excluir esta área de limpeza da rotina diária?')) {
-      const updated = deleteLimpezaRoutine(routine, id);
-      onUpdateRoutine(updated);
-    }
+    const item = routine.limpezas.find((l) => l.id === id);
+    setPendingDelete({
+      type: 'limpeza',
+      id,
+      label: `Área de Limpeza "${item?.area || id}"`,
+    });
   };
 
   // Freezer Atividades
@@ -372,10 +540,69 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
 
   const handleDeleteFreezer = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Excluir esta atividade de verificação dos freezers?')) {
-      const updated = deleteFreezerRoutineItem(routine, id);
-      onUpdateRoutine(updated);
+    const item = freezerItems.find((f) => f.id === id);
+    setPendingDelete({
+      type: 'freezer',
+      id,
+      label: `Atividade dos Freezers "${item?.atividade || item?.nome || id}"`,
+    });
+  };
+
+  // ================= GESTÃO ROTINAS DIÁRIAS EXTRAS =================
+  const handleSaveCustomRoutine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTitulo.trim()) return;
+    const respUser = users.find((u) => u.id === customRespId) || users[0];
+    const auxUser = users.find((u) => u.id === customAuxId);
+
+    const updated = addCustomRoutineItem(routine, {
+      titulo: customTitulo.trim(),
+      responsavelId: respUser.id,
+      responsavelNome: respUser.nome,
+      auxiliarId: auxUser?.id,
+      auxiliarNome: auxUser?.nome,
+      categoria: customCategoria,
+      observacoes: customObs.trim() || undefined,
+      horario: customHorario.trim() || undefined,
+      concluido: false,
+    });
+    onUpdateRoutine(updated);
+    setCustomTitulo('');
+    setCustomObs('');
+    setCustomHorario('');
+    setCustomAuxId('');
+    setShowAddCustomModal(false);
+  };
+
+  const handleToggleCustomRoutine = (id: string) => {
+    const updated = toggleCustomRoutineItem(routine, id);
+    onUpdateRoutine(updated);
+  };
+
+  const handleDeleteCustomRoutine = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const item = extraRoutines.find((r) => r.id === id);
+    setPendingDelete({
+      type: 'custom',
+      id,
+      label: `Rotina Extra "${item?.titulo || id}"`,
+    });
+  };
+
+  const handleExecutePendingDelete = () => {
+    if (!pendingDelete) return;
+    let updated = routine;
+    if (pendingDelete.type === 'expositor') {
+      updated = deleteExpositorRoutine(routine, pendingDelete.id);
+    } else if (pendingDelete.type === 'limpeza') {
+      updated = deleteLimpezaRoutine(routine, pendingDelete.id);
+    } else if (pendingDelete.type === 'freezer') {
+      updated = deleteFreezerRoutineItem(routine, pendingDelete.id);
+    } else if (pendingDelete.type === 'custom') {
+      updated = deleteCustomRoutineItem(routine, pendingDelete.id);
     }
+    onUpdateRoutine(updated);
+    setPendingDelete(null);
   };
 
   const cocoEtapas = routine.aguaDeCoco.etapas || {
@@ -401,10 +628,15 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
                   Sexta-feira (Pico de Coco)
                 </span>
               )}
-              {isAdmin && (
+              {isAdmin ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-emerald-100 border border-white/20">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-                  Modo Administrador
+                  Modo Administrador (Gestão)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-emerald-100 border border-white/20">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  Visualização Individual ({currentUser?.nome})
                 </span>
               )}
             </div>
@@ -412,12 +644,24 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
               {formattedDate}
             </h2>
             <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-2xl">
-              Gestão de atividades, balanceamento justo e conformidade operacional do Hortifrúti Beto da Fruta
+              {isAdmin
+                ? 'Gestão de atividades, balanceamento justo e conformidade operacional do Hortifrúti Beto da Fruta'
+                : `Painel de rotinas atribuídas a ${currentUser?.nome}. Acompanhe e marque suas obrigações diárias.`}
             </p>
           </div>
 
           {/* Quick Action Buttons (Large Touch Targets >= 44px) */}
           <div className="flex items-center gap-2.5 flex-wrap">
+            {isAdmin && (
+              <button
+                onClick={() => setShowAddCustomModal(true)}
+                type="button"
+                className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 hover:bg-amber-300 text-emerald-950 shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                + Nova Rotina Diária
+              </button>
+            )}
             <button
               onClick={onSyncWithTasks}
               type="button"
@@ -437,1113 +681,1585 @@ export const DailyRoutinesTab: React.FC<DailyRoutinesTabProps> = ({
           </div>
         </div>
 
-        {/* Global Progress Bar */}
+        {/* Dynamic Progress Bar (Personal vs Overall Team) */}
         <div className="mt-5 pt-4 border-t border-emerald-800/60">
           <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
             <span className="font-bold text-emerald-100 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              Progresso Geral das Rotinas do Dia
+              {effectiveUserId
+                ? `Progresso de ${
+                    effectiveUserId === currentUser?.id
+                      ? 'Suas Rotinas de Hoje'
+                      : users.find((u) => u.id === effectiveUserId)?.nome || 'Colaborador'
+                  }`
+                : 'Progresso Geral de Toda a Equipe'}
             </span>
             <span className="font-mono font-bold text-white bg-emerald-900/90 border border-emerald-700/60 px-3 py-0.5 rounded-lg">
-              {completedItems}/{totalItems} ({progressPct}%)
+              {effectiveUserId
+                ? `${currentStats?.completed || 0}/${currentStats?.total || 0} (${currentProgressPct}%)`
+                : `${completedItems}/${totalItems} (${progressPct}%)`}
             </span>
           </div>
           <div className="w-full h-3 bg-emerald-950/70 rounded-full overflow-hidden p-0.5 border border-emerald-800/40">
             <div
               className="h-full bg-gradient-to-r from-emerald-400 to-emerald-200 rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
+              style={{ width: `${effectiveUserId ? currentProgressPct : progressPct}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Routine Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ================= 1. REPOSIÇÃO DO HORTIFRÚTI & CONTAGEM ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* Collaborator View Bar (Admin has interactive filters; Operational staff has locked individual banner) */}
+      {isAdmin ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  1. Reposição do Hortifrúti por Setores
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Divisão de bancas, contagem matinal e apoio mútuo
-                </p>
-              </div>
-            </div>
-
-            {isAdmin && (
-              <button
-                onClick={() => setShowAddExpositor(!showAddExpositor)}
-                type="button"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-colors cursor-pointer"
-                title="Adicionar novo setor ou expositor à rotina (Administrador)"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar Setor
-              </button>
-            )}
-          </div>
-
-          {/* Admin Add Expositor Inline Form */}
-          {isAdmin && showAddExpositor && (
-            <form
-              onSubmit={handleConfirmAddExpositor}
-              className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                  Cadastrar Novo Setor / Expositor
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddExpositor(false)}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Nome da Banca / Setor *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Expositor D, Bancada Melancias"
-                    value={newExpositorNome}
-                    onChange={(e) => setNewExpositorNome(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Responsável Principal *
-                  </label>
-                  <select
-                    value={newExpositorRespId}
-                    onChange={(e) => setNewExpositorRespId(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nome} ({u.cargoDescricao || u.perfil})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Auxiliar (Opcional)
-                  </label>
-                  <select
-                    value={newExpositorAuxId}
-                    onChange={(e) => setNewExpositorAuxId(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    <option value="">Nenhum</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Observações Operacionais
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Foco em reposição contínua e precificação"
-                    value={newExpositorObs}
-                    onChange={(e) => setNewExpositorObs(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddExpositor(false)}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-3.5 py-1 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 shadow-xs cursor-pointer"
-                >
-                  Salvar Expositor
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Morning Counter Selector & Rule */}
-          <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-emerald-700" />
-                Quem realizou a Contagem Matinal de Abertura?
-              </label>
-              <button
-                onClick={handleToggleContagem}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                  routine.contagemConcluida
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                }`}
-              >
-                {routine.contagemConcluida ? '✓ Contagem Feita' : 'Marcar Feita'}
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'USR-01', nome: 'Charles' },
-                { id: 'USR-04', nome: 'Lucas' },
-                { id: 'USR-05', nome: 'Rafael' },
-              ].map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleChangeCounter(c.id)}
-                  type="button"
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
-                    routine.responsavelContagemId === c.id
-                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {c.nome} {routine.responsavelContagemId === c.id ? '(Contou)' : ''}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-emerald-800 pt-1 leading-snug">
-              ⚡ <strong>Regra do Hortifrúti:</strong> Quem faz a contagem (
-              <strong>{routine.responsavelContagemNome}</strong>) fica responsável pela reposição do{' '}
-              <strong>Expositor C</strong> e a <strong>Bianca auxilia</strong>. Os demais setores ficam divididos entre os outros funcionários.
-            </p>
-          </div>
-
-          {/* Expositores List */}
-          <div className="space-y-2.5">
-            {routine.expositores.map((exp, idx) => (
-              <div
-                key={exp.id || exp.expositor}
-                onClick={() => handleToggleExpositor(idx)}
-                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                  exp.concluido
-                    ? 'bg-emerald-50/60 border-emerald-300'
-                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
-                      exp.concluido
-                        ? 'bg-emerald-600 text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-slate-900">{exp.expositor}</span>
-                      {exp.expositor === 'Expositor C' && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                          Contador + Bianca auxilia
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Responsável: <strong className="text-slate-800">{exp.responsavelNome}</strong>
-                      {exp.auxiliarNome && (
-                        <span>
-                          {' '}
-                          | Auxílio: <strong className="text-slate-800">{exp.auxiliarNome}</strong>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      exp.concluido
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {exp.concluido ? 'Abastecido' : 'Pendente'}
-                  </span>
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => handleDeleteExpositor(exp.id || exp.expositor, e)}
-                      type="button"
-                      title="Excluir este setor/expositor da rotina (Admin)"
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ================= 2. ATENDIMENTO AO BALCÃO (SORTEAR OU ESCOLHER ADMIN) ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
-                <Store className="w-5 h-5 text-emerald-800" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">2. Atendimento ao Balcão</h3>
-                <p className="text-[11px] text-slate-500">
-                  1 Responsável todos os dias — Além de repor, atende ao balcão
-                </p>
-              </div>
-            </div>
-
-            {/* Sorteio / Randomize button */}
-            {isAdmin && (
-              <button
-                onClick={handleRerollBalcao}
-                type="button"
-                title="Sortear outro funcionário disponível aleatoriamente"
-                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <Shuffle className="w-4 h-4 text-emerald-700" />
-                Sortear
-              </button>
-            )}
-          </div>
-
-          {/* Admin Selection Controls for Atendente Balcão */}
-          {isAdmin ? (
-            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  Escolha do Atendente (Controle do Administrador)
-                </label>
-                <span className="text-[10px] text-emerald-700 font-semibold">
-                  Manual ou sorteio
-                </span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <select
-                  value={routine.atendimentoBalcao.responsavelId}
-                  onChange={(e) => handleSelectBalcaoUser(e.target.value)}
-                  className="min-h-[44px] flex-1 text-xs font-bold text-slate-900 bg-white border border-emerald-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nome} — {u.cargoDescricao || u.perfil}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={handleRerollBalcao}
-                  type="button"
-                  className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Shuffle className="w-4 h-4 text-emerald-700" />
-                  Sortear Aleatório
-                </button>
-              </div>
-
-              {/* Quick Staff Shortcuts */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
-                <span className="text-[11px] font-semibold text-emerald-900">Atalhos rápidos:</span>
-                {users.slice(0, 5).map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => handleSelectBalcaoUser(u.id)}
-                    className={`min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                      routine.atendimentoBalcao.responsavelId === u.id
-                        ? 'bg-[#0a3821] text-white border-[#0a3821]'
-                        : 'bg-white text-emerald-900 border-emerald-200 hover:bg-emerald-50'
-                    }`}
-                  >
-                    {u.nome.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
-              <span className="font-semibold text-slate-700">Designação do Atendimento:</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-xs">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                Definido pela Administração
+              <Users className="w-4 h-4 text-emerald-700" />
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Filtrar Rotinas por Colaborador (Acesso Exclusivo da Gestão):
               </span>
-            </div>
-          )}
-
-          {/* Active Attendant Card (Large touch target >= 56px) */}
-          <div
-            onClick={handleToggleBalcao}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
-              routine.atendimentoBalcao.concluido
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
-                Responsável Ativo no Balcão Hoje
-              </span>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  routine.atendimentoBalcao.concluido
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-[#0a3821] text-white'
-                }`}
-              >
-                {routine.atendimentoBalcao.concluido ? '✓ Atendimento Concluído' : 'Em Atendimento'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-[#0a3821] text-white font-black text-lg flex items-center justify-center shadow-xs shrink-0">
-                {routine.atendimentoBalcao.responsavelNome.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-slate-900">
-                  {routine.atendimentoBalcao.responsavelNome}
-                </h4>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Dupla atribuição: Realiza atendimento cordial aos clientes no balcão e faz reposição contínua.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Info Box */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
-            <p className="font-semibold text-slate-800">
-              📌 Regra Operacional: Atendimento & Reposição
-            </p>
-            <p>
-              O funcionário no balcão não fica ocioso quando o movimento abaixar. Ele abastece a área próxima e se reveza se necessário com suporte da Bianca ou Charles.
-            </p>
-          </div>
-        </div>
-
-        {/* ================= 3. LIMPEZA DIÁRIA DOS SETORES ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
-                <Brush className="w-5 h-5 text-emerald-800" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">3. Limpeza Diária de Setores</h3>
-                <p className="text-[11px] text-slate-500">
-                  Rita (circulação, produção, banheiros, estoque, lavagem) e Bianca (caixa, balcão)
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
-                {routine.limpezas.filter((l) => l.concluido).length}/{routine.limpezas.length} Feitos
-              </span>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowAddLimpeza(!showAddLimpeza)}
-                  type="button"
-                  className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
-                  title="Adicionar nova área de limpeza (Administrador)"
-                >
-                  <Plus className="w-4 h-4 text-emerald-700" />
-                  Adicionar Área
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Admin Add Limpeza Inline Form */}
-          {isAdmin && showAddLimpeza && (
-            <form
-              onSubmit={handleConfirmAddLimpeza}
-              className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  Cadastrar Nova Área de Limpeza
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddLimpeza(false)}
-                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Nome da Área *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Calçada Externa, Câmara Fria"
-                    value={newLimpezaArea}
-                    onChange={(e) => setNewLimpezaArea(e.target.value)}
-                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Responsável *
-                  </label>
-                  <select
-                    value={newLimpezaRespId}
-                    onChange={(e) => setNewLimpezaRespId(e.target.value)}
-                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nome} ({u.cargoDescricao || u.perfil})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddLimpeza(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
-                >
-                  Salvar Área
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Limpezas List (Large touch targets >= 44px) */}
-          <div className="space-y-2">
-            {routine.limpezas.map((lmp) => (
-              <div
-                key={lmp.id}
-                onClick={() => handleToggleLimpeza(lmp.id)}
-                className={`min-h-[46px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
-                  lmp.concluido
-                    ? 'bg-emerald-50/70 border-emerald-300'
-                    : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      lmp.concluido
-                        ? 'bg-[#0a3821] text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-900">{lmp.area}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-800">
-                    {lmp.responsavelNome}
-                  </span>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                      lmp.concluido ? 'text-emerald-800 bg-emerald-100' : 'text-slate-500 bg-slate-100'
-                    }`}
-                  >
-                    {lmp.concluido ? 'Limpo' : 'Pendente'}
-                  </span>
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => handleDeleteLimpeza(lmp.id, e)}
-                      type="button"
-                      title="Excluir esta área de limpeza (Admin)"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ================= 4. VERIFICAÇÃO DOS FREEZERS (GERENCIAMENTO DE ATIVIDADES) ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
-                <Thermometer className="w-5 h-5 text-emerald-800" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">4. Verificação dos Freezers — Atividades (Vanessa)</h3>
-                <p className="text-[11px] text-slate-500">
-                  Checklist diário de inspeção, controle de temperatura e qualidade dos congelados
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
-                {freezerItems.filter((f) => f.concluido).length}/{freezerItems.length} Feitas
-              </span>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowAddFreezer(!showAddFreezer)}
-                  type="button"
-                  className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
-                  title="Adicionar nova atividade de verificação dos freezers (Administrador)"
-                >
-                  <Plus className="w-4 h-4 text-emerald-700" />
-                  Adicionar Atividade
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Admin Add Freezer Atividade Inline Form */}
-          {isAdmin && showAddFreezer && (
-            <form
-              onSubmit={handleConfirmAddFreezer}
-              className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  Cadastrar Nova Atividade de Verificação dos Freezers
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddFreezer(false)}
-                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                <div className="sm:col-span-1">
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Atividade de Verificação *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Checagem de vedação e acúmulo de gelo"
-                    value={newFreezerAtividade}
-                    onChange={(e) => setNewFreezerAtividade(e.target.value)}
-                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Parâmetro / Temperatura (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: -18°C ou Rotação PEPS"
-                    value={newFreezerTemp}
-                    onChange={(e) => setNewFreezerTemp(e.target.value)}
-                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Responsável *
-                  </label>
-                  <select
-                    value={newFreezerRespId}
-                    onChange={(e) => setNewFreezerRespId(e.target.value)}
-                    className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nome} ({u.cargoDescricao || u.perfil})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddFreezer(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
-                >
-                  Salvar Atividade
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Freezer Activities List (Large touch targets >= 44px) */}
-          <div className="space-y-2.5">
-            {freezerItems.map((frz) => (
-              <div
-                key={frz.id}
-                onClick={() => handleToggleFreezersItem(frz.id)}
-                className={`min-h-[48px] p-3.5 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
-                  frz.concluido
-                    ? 'bg-emerald-50/70 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      frz.concluido
-                        ? 'bg-[#0a3821] text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs sm:text-sm text-slate-900">{frz.atividade || frz.nome}</h4>
-                    <p className="text-[11px] text-slate-600">
-                      Responsável: <strong className="text-slate-800">{frz.responsavelNome}</strong>
-                      {frz.observacoes && ` • ${frz.observacoes}`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {frz.temperaturaAferida && (
-                    <span className="text-xs font-mono font-bold text-emerald-950 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded">
-                      {frz.temperaturaAferida}
-                    </span>
-                  )}
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      frz.concluido
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {frz.concluido ? '✓ Realizada' : 'Pendente'}
-                  </span>
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => handleDeleteFreezer(frz.id, e)}
-                      type="button"
-                      title="Excluir esta atividade da verificação dos freezers (Admin)"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ================= 5. CONFERÊNCIA E DESCARGA DA KOMBI ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
-                <Truck className="w-5 h-5 text-emerald-800" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  5. Conferência &amp; Descarga da Kombi
-                </h3>
-                <p className="text-[11px] text-slate-500">Alternância entre Lucas ou Rafael</p>
-              </div>
             </div>
             <button
-              onClick={handleSwapKombiResponsavel}
+              onClick={() => setShowAddCustomModal(true)}
               type="button"
-              className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all inline-flex items-center gap-1 cursor-pointer"
+              className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] hover:bg-emerald-900 text-white shadow-xs cursor-pointer active:scale-[0.98] transition-all"
             >
-              Trocar: {routine.descargaKombi.responsavelNome === 'Lucas' ? 'Rafael' : 'Lucas'}
+              <Plus className="w-4 h-4" />
+              Adicionar Rotina Diária
             </button>
           </div>
 
-          <div
-            onClick={handleToggleKombi}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
-              routine.descargaKombi.concluido
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setAdminUserFilter('todos')}
+              className={`min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                adminUserFilter === 'todos'
+                  ? 'bg-[#0a3821] text-white border-[#0a3821] shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              👥 Toda a Equipe ({totalItems})
+            </button>
+
+            {users.map((u) => {
+              const isSelected = adminUserFilter === u.id;
+              const uStats = getUserRoutineStats(u.id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => setAdminUserFilter(u.id)}
+                  className={`min-h-[42px] px-3 py-2 rounded-xl text-xs border transition-all flex items-center gap-2 cursor-pointer ${
+                    isSelected
+                      ? 'bg-emerald-700 text-white border-emerald-700 font-bold shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{u.nome}</span>
+                  <span
+                    className={`text-[11px] px-1.5 py-0.5 rounded-md font-mono font-bold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {uStats.completed}/{uStats.total}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {adminUserFilter !== 'todos' && (
+            <div className="flex items-center justify-between text-xs text-emerald-900 bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200">
+              <span>
+                Visualizando exclusivamente o que <strong>{users.find((u) => u.id === adminUserFilter)?.nome}</strong> enxerga em sua tela (titular e auxiliar).
+              </span>
+              <button
+                type="button"
+                onClick={() => setAdminUserFilter('todos')}
+                className="font-bold underline cursor-pointer text-emerald-800 hover:text-emerald-950"
+              >
+                Voltar p/ Toda a Equipe
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border-2 border-emerald-600/30 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-[#0a3821] text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+              {currentUser?.nome ? currentUser.nome.slice(0, 2).toUpperCase() : 'EU'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  Suas Atividades Diárias: {currentUser?.nome}
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  {currentUser?.cargoDescricao || currentUser?.perfil}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Visualização restrita ao colaborador: apenas tarefas e rotinas em que você é responsável titular ou auxiliar.
+              </p>
+            </div>
+          </div>
+          <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200">
+            <span className="text-xs font-semibold text-slate-600">Suas tarefas hoje:</span>
+            <span className="text-xs font-mono font-black text-[#0a3821] bg-white px-2 py-0.5 rounded border border-slate-200">
+              {currentStats?.completed || 0} de {currentStats?.total || 0} ({currentProgressPct}%)
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Routine Cards Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ================= 1. REPOSIÇÃO DO HORTIFRÚTI & CONTAGEM ================= */}
+        {showExpositoresCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  1
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    1. Reposição do Hortifrúti por Setores
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Divisão de bancas, contagem matinal e apoio mútuo
+                  </p>
+                </div>
+              </div>
+
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddExpositor(!showAddExpositor)}
+                  type="button"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-colors cursor-pointer"
+                  title="Adicionar novo setor ou expositor à rotina (Administrador)"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar Setor
+                </button>
+              )}
+            </div>
+
+            {/* Admin Add Expositor Inline Form */}
+            {isAdmin && showAddExpositor && (
+              <form
+                onSubmit={handleConfirmAddExpositor}
+                className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                    Cadastrar Novo Setor / Expositor
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddExpositor(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Nome da Banca / Setor *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Expositor D, Bancada Melancias"
+                      value={newExpositorNome}
+                      onChange={(e) => setNewExpositorNome(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Responsável Principal *
+                    </label>
+                    <select
+                      value={newExpositorRespId}
+                      onChange={(e) => setNewExpositorRespId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nome} ({u.cargoDescricao || u.perfil})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Auxiliar (Opcional)
+                    </label>
+                    <select
+                      value={newExpositorAuxId}
+                      onChange={(e) => setNewExpositorAuxId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="">Nenhum</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Observações Operacionais
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Foco em reposição contínua e precificação"
+                      value={newExpositorObs}
+                      onChange={(e) => setNewExpositorObs(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddExpositor(false)}
+                    className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3.5 py-1 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 shadow-xs cursor-pointer"
+                  >
+                    Salvar Expositor
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Morning Counter Selector & Rule */}
+            {showContagem && (
+              <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                    Quem realizou a Contagem Matinal de Abertura?
+                  </label>
+                  <button
+                    onClick={handleToggleContagem}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      routine.contagemConcluida
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {routine.contagemConcluida ? '✓ Contagem Feita' : 'Marcar Feita'}
+                  </button>
+                </div>
+                {isAdmin ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'USR-01', nome: 'Charles' },
+                      { id: 'USR-04', nome: 'Lucas' },
+                      { id: 'USR-05', nome: 'Rafael' },
+                    ].map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleChangeCounter(c.id)}
+                        type="button"
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
+                          routine.responsavelContagemId === c.id
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {c.nome} {routine.responsavelContagemId === c.id ? '(Contou)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-2 bg-white rounded-lg border border-emerald-200 text-xs font-bold text-emerald-900">
+                    Contador da Abertura: <strong>{routine.responsavelContagemNome}</strong>
+                  </div>
+                )}
+                <p className="text-[11px] text-emerald-800 pt-1 leading-snug">
+                  ⚡ <strong>Regra do Hortifrúti:</strong> Quem faz a contagem (
+                  <strong>{routine.responsavelContagemNome}</strong>) fica responsável pela reposição do{' '}
+                  <strong>Expositor C</strong> e a <strong>Bianca auxilia</strong>. Os demais setores ficam divididos entre os outros funcionários.
+                </p>
+              </div>
+            )}
+
+            {/* Expositores List */}
+            <div className="space-y-2.5">
+              {filteredExpositores.length > 0 ? (
+                filteredExpositores.map((exp) => {
+                  const origIdx = routine.expositores.findIndex((e) => e.expositor === exp.expositor);
+                  return (
+                    <div
+                      key={exp.id || exp.expositor}
+                      onClick={() => origIdx >= 0 && handleToggleExpositor(origIdx)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        exp.concluido
+                          ? 'bg-emerald-50/60 border-emerald-300'
+                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
+                            exp.concluido
+                              ? 'bg-emerald-600 text-white'
+                              : 'border-2 border-slate-300 bg-white text-transparent'
+                          }`}
+                        >
+                          ✓
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-slate-900">{exp.expositor}</span>
+                            {exp.expositor === 'Expositor C' && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                Contador + Bianca auxilia
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-600">
+                            Responsável: <strong className="text-slate-800">{exp.responsavelNome}</strong>
+                            {exp.auxiliarNome && (
+                              <span>
+                                {' '}
+                                | Auxílio: <strong className="text-slate-800">{exp.auxiliarNome}</strong>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            exp.concluido
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {exp.concluido ? 'Abastecido' : 'Pendente'}
+                        </span>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => handleDeleteExpositor(exp.id || exp.expositor, e)}
+                            type="button"
+                            title="Excluir este setor/expositor da rotina (Admin)"
+                            className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-slate-500 italic p-3 text-center bg-slate-50 rounded-xl">
+                  Nenhum setor de hortifrúti atribuído a você nesta escala.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= 2. ATENDIMENTO AO BALCÃO (SORTEAR OU ESCOLHER ADMIN) ================= */}
+        {showBalcaoCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Store className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">2. Atendimento ao Balcão</h3>
+                  <p className="text-[11px] text-slate-500">
+                    1 Responsável todos os dias — Além de repor, atende ao balcão
+                  </p>
+                </div>
+              </div>
+
+              {/* Sorteio / Randomize button */}
+              {isAdmin && (
+                <button
+                  onClick={handleRerollBalcao}
+                  type="button"
+                  title="Sortear outro funcionário disponível aleatoriamente"
+                  className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <Shuffle className="w-4 h-4 text-emerald-700" />
+                  Sortear
+                </button>
+              )}
+            </div>
+
+            {/* Admin Selection Controls for Atendente Balcão */}
+            {isAdmin ? (
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    Escolha do Atendente (Controle do Administrador)
+                  </label>
+                  <span className="text-[10px] text-emerald-700 font-semibold">
+                    Manual ou sorteio
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <select
+                    value={routine.atendimentoBalcao.responsavelId}
+                    onChange={(e) => handleSelectBalcaoUser(e.target.value)}
+                    className="min-h-[44px] flex-1 text-xs font-bold text-slate-900 bg-white border border-emerald-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nome} — {u.cargoDescricao || u.perfil}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={handleRerollBalcao}
+                    type="button"
+                    className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Shuffle className="w-4 h-4 text-emerald-700" />
+                    Sortear Aleatório
+                  </button>
+                </div>
+
+                {/* Quick Staff Shortcuts */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+                  <span className="text-[11px] font-semibold text-emerald-900">Atalhos rápidos:</span>
+                  {users.slice(0, 5).map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => handleSelectBalcaoUser(u.id)}
+                      className={`min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                        routine.atendimentoBalcao.responsavelId === u.id
+                          ? 'bg-[#0a3821] text-white border-[#0a3821]'
+                          : 'bg-white text-emerald-900 border-emerald-200 hover:bg-emerald-50'
+                      }`}
+                    >
+                      {u.nome.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Designação do Atendimento:</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  Definido pela Administração
+                </span>
+              </div>
+            )}
+
+            {/* Active Attendant Card (Large touch target >= 56px) */}
+            <div
+              onClick={handleToggleBalcao}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
+                routine.atendimentoBalcao.concluido
+                  ? 'bg-emerald-50/70 border-emerald-300'
+                  : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                  Responsável Ativo no Balcão Hoje
+                </span>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    routine.atendimentoBalcao.concluido
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-[#0a3821] text-white'
+                  }`}
+                >
+                  {routine.atendimentoBalcao.concluido ? '✓ Atendimento Concluído' : 'Em Atendimento'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-[#0a3821] text-white font-black text-lg flex items-center justify-center shadow-xs shrink-0">
+                  {routine.atendimentoBalcao.responsavelNome.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-slate-900">
+                    {routine.atendimentoBalcao.responsavelNome}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Dupla atribuição: Realiza atendimento cordial aos clientes no balcão e faz reposição contínua.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Info Box */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+              <p className="font-semibold text-slate-800">
+                📌 Regra Operacional: Atendimento & Reposição
+              </p>
+              <p>
+                O funcionário no balcão não fica ocioso quando o movimento abaixar. Ele abastece a área próxima e se reveza se necessário com suporte da Bianca ou Charles.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ================= 3. LIMPEZA DIÁRIA DOS SETORES ================= */}
+        {showLimpezaCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Brush className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">3. Limpeza Diária de Setores</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Rita (circulação, produção, banheiros, estoque, lavagem) e Bianca (caixa, balcão)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
+                  {filteredLimpezas.filter((l) => l.concluido).length}/{filteredLimpezas.length} Feitos
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddLimpeza(!showAddLimpeza)}
+                    type="button"
+                    className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
+                    title="Adicionar nova área de limpeza (Administrador)"
+                  >
+                    <Plus className="w-4 h-4 text-emerald-700" />
+                    Adicionar Área
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Admin Add Limpeza Inline Form */}
+            {isAdmin && showAddLimpeza && (
+              <form
+                onSubmit={handleConfirmAddLimpeza}
+                className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    Cadastrar Nova Área de Limpeza
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddLimpeza(false)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Nome da Área *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Calçada Externa, Câmara Fria"
+                      value={newLimpezaArea}
+                      onChange={(e) => setNewLimpezaArea(e.target.value)}
+                      className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Responsável *
+                    </label>
+                    <select
+                      value={newLimpezaRespId}
+                      onChange={(e) => setNewLimpezaRespId(e.target.value)}
+                      className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nome} ({u.cargoDescricao || u.perfil})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddLimpeza(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
+                  >
+                    Salvar Área
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Limpezas List (Large touch targets >= 44px) */}
+            <div className="space-y-2">
+              {filteredLimpezas.map((lmp) => (
                 <div
-                  className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
+                  key={lmp.id}
+                  onClick={() => handleToggleLimpeza(lmp.id)}
+                  className={`min-h-[46px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                    lmp.concluido
+                      ? 'bg-emerald-50/70 border-emerald-300'
+                      : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        lmp.concluido
+                          ? 'bg-[#0a3821] text-white'
+                          : 'border-2 border-slate-300 bg-white text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">{lmp.area}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-800">
+                      {lmp.responsavelNome}
+                    </span>
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        lmp.concluido ? 'text-emerald-800 bg-emerald-100' : 'text-slate-500 bg-slate-100'
+                      }`}
+                    >
+                      {lmp.concluido ? 'Limpo' : 'Pendente'}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => handleDeleteLimpeza(lmp.id, e)}
+                        type="button"
+                        title="Excluir esta área de limpeza (Admin)"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ================= 4. VERIFICAÇÃO DOS FREEZERS (GERENCIAMENTO DE ATIVIDADES) ================= */}
+        {showFreezersCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Thermometer className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">4. Verificação dos Freezers — Atividades (Vanessa)</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Checklist diário de inspeção, controle de temperatura e qualidade dos congelados
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
+                  {filteredFreezers.filter((f) => f.concluido).length}/{filteredFreezers.length} Feitas
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddFreezer(!showAddFreezer)}
+                    type="button"
+                    className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
+                    title="Adicionar nova atividade de verificação dos freezers (Administrador)"
+                  >
+                    <Plus className="w-4 h-4 text-emerald-700" />
+                    Adicionar Atividade
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Admin Add Freezer Atividade Inline Form */}
+            {isAdmin && showAddFreezer && (
+              <form
+                onSubmit={handleConfirmAddFreezer}
+                className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-3 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    Cadastrar Nova Atividade de Verificação dos Freezers
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddFreezer(false)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="sm:col-span-1">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Atividade de Verificação *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Checagem de vedação e acúmulo de gelo"
+                      value={newFreezerAtividade}
+                      onChange={(e) => setNewFreezerAtividade(e.target.value)}
+                      className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Parâmetro / Temperatura (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: -18°C ou Rotação PEPS"
+                      value={newFreezerTemp}
+                      onChange={(e) => setNewFreezerTemp(e.target.value)}
+                      className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Responsável *
+                    </label>
+                    <select
+                      value={newFreezerRespId}
+                      onChange={(e) => setNewFreezerRespId(e.target.value)}
+                      className="min-h-[40px] w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nome} ({u.cargoDescricao || u.perfil})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddFreezer(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-800 shadow-xs active:scale-[0.98] cursor-pointer"
+                  >
+                    Salvar Atividade
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Freezer Activities List (Large touch targets >= 44px) */}
+            <div className="space-y-2.5">
+              {filteredFreezers.map((frz) => (
+                <div
+                  key={frz.id}
+                  onClick={() => handleToggleFreezersItem(frz.id)}
+                  className={`min-h-[48px] p-3.5 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                    frz.concluido
+                      ? 'bg-emerald-50/70 border-emerald-300'
+                      : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        frz.concluido
+                          ? 'bg-[#0a3821] text-white'
+                          : 'border-2 border-slate-300 bg-white text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs sm:text-sm text-slate-900">{frz.atividade || frz.nome}</h4>
+                      <p className="text-[11px] text-slate-600">
+                        Responsável: <strong className="text-slate-800">{frz.responsavelNome}</strong>
+                        {frz.observacoes && ` • ${frz.observacoes}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {frz.temperaturaAferida && (
+                      <span className="text-xs font-mono font-bold text-emerald-950 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded">
+                        {frz.temperaturaAferida}
+                      </span>
+                    )}
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        frz.concluido
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {frz.concluido ? '✓ Realizada' : 'Pendente'}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => handleDeleteFreezer(frz.id, e)}
+                        type="button"
+                        title="Excluir esta atividade da verificação dos freezers (Admin)"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ================= 5. CONFERÊNCIA E DESCARGA DA KOMBI ================= */}
+        {showKombiCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Truck className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    5. Conferência &amp; Descarga da Kombi
+                  </h3>
+                  <p className="text-[11px] text-slate-500">Alternância entre Lucas ou Rafael</p>
+                </div>
+              </div>
+              <button
+                onClick={handleSwapKombiResponsavel}
+                type="button"
+                className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all inline-flex items-center gap-1 cursor-pointer"
+              >
+                Trocar: {routine.descargaKombi.responsavelNome === 'Lucas' ? 'Rafael' : 'Lucas'}
+              </button>
+            </div>
+
+            <div
+              onClick={handleToggleKombi}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.99] ${
+                routine.descargaKombi.concluido
+                  ? 'bg-emerald-50/70 border-emerald-300'
+                  : 'bg-white border-[#0a3821] shadow-xs hover:bg-emerald-50/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
+                      routine.descargaKombi.concluido
+                        ? 'bg-[#0a3821] text-white'
+                        : 'border-2 border-slate-300 bg-white text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </div>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900">
+                    Responsável: {routine.descargaKombi.responsavelNome}
+                  </span>
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold ${
                     routine.descargaKombi.concluido
-                      ? 'bg-[#0a3821] text-white'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-[#0a3821] text-white'
+                  }`}
+                >
+                  {routine.descargaKombi.concluido ? '✓ Descarregada' : 'Aguardando Chegada'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 pl-8">
+                Conferir caixas descarregadas da Kombi com a nota de entrega, triar frutas sensíveis e levar para a área de higienização ou bancas.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ================= 6. PRODUÇÃO DE ÁGUA DE COCO (FEITO SOMENTE POR 1 FUNCIONÁRIO: LUCAS OU RAFAEL) ================= */}
+        {showCocoCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Droplets className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    6. Produção de Água de Coco (Lucas OU Rafael)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Feito somente por 1 funcionário no dia — ou Lucas ou Rafael, nunca os dois
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSwapCocoResponsavel}
+                  type="button"
+                  title="Alternar responsável único pelo coco hoje"
+                  className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <Shuffle className="w-3.5 h-3.5 text-emerald-700" />
+                  Alternar: {(routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome) === 'Lucas' ? 'Passar p/ Rafael' : 'Passar p/ Lucas'}
+                </button>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-black ${
+                    routine.isSextaFeira
+                      ? 'bg-amber-400 text-emerald-950 animate-pulse'
+                      : 'bg-[#0a3821] text-white'
+                  }`}
+                >
+                  Meta: {routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros}L
+                </span>
+              </div>
+            </div>
+
+            {/* Operational Rule Notice */}
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                <span>
+                  <strong>Regra Operacional:</strong> A produção é feita exclusivamente por{' '}
+                  <strong>1 funcionário</strong> (ou Lucas ou Rafael, nunca os dois no mesmo dia).
+                </span>
+              </div>
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-950 bg-white border border-emerald-300 px-3 py-1.5 rounded-xl text-xs shrink-0 self-start sm:self-auto shadow-2xs">
+                Responsável Único Hoje:{' '}
+                <strong className="text-emerald-800">
+                  {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
+                </strong>
+              </span>
+            </div>
+
+            {/* Target, Liters Input and Save */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-800">
+                  Escalado Hoje:{' '}
+                  <strong className="text-[#0a3821]">
+                    {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
+                  </strong>{' '}
+                  (Atribuição Individual)
+                </span>
+                <span className="font-mono text-emerald-800 font-bold">
+                  {coconutInput >= routine.aguaDeCoco.metaMinLitros ? '✓ Meta de Litros Atingida' : 'Em Produção'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="150"
+                    value={coconutInput}
+                    onChange={(e) => setCoconutInput(Number(e.target.value))}
+                    className="min-h-[44px] w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-white border border-slate-300 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Litros produzidos"
+                  />
+                  <span className="absolute right-3.5 top-3 text-xs font-bold text-slate-400">
+                    Litros
+                  </span>
+                </div>
+                <button
+                  onClick={handleSaveCocoLitros}
+                  type="button"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0a3821] hover:bg-emerald-800 text-white shadow-xs active:scale-[0.98] transition-all cursor-pointer shrink-0"
+                >
+                  Salvar Litragem
+                </button>
+              </div>
+
+              {/* 3 MANDATORY STAGES CHECKLIST (Large touch targets >= 48px) */}
+              <div className="pt-2 border-t border-slate-200 space-y-2.5">
+                <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider block">
+                  Atividades Obrigatórias do Processo de Coco:
+                </span>
+
+                {/* Etapa 1: Produção na Garrafa */}
+                <div
+                  onClick={() => handleToggleCocoSubEtapa('garrafasEnvase')}
+                  className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                    cocoEtapas.garrafasEnvase
+                      ? 'bg-emerald-50/80 border-emerald-300'
+                      : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        cocoEtapas.garrafasEnvase
+                          ? 'bg-[#0a3821] text-white'
+                          : 'border-2 border-slate-300 bg-white text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900">
+                        1. Produção de água de coco na garrafa
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Envase limpo, lacre e refrigeração imediata ({routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros} Litros).
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      cocoEtapas.garrafasEnvase ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {cocoEtapas.garrafasEnvase ? '✓ Concluído' : 'Pendente'}
+                  </span>
+                </div>
+
+                {/* Etapa 2: Corte e Retirada da Polpa */}
+                <div
+                  onClick={() => handleToggleCocoSubEtapa('corteERetiradaPolpa')}
+                  className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                    cocoEtapas.corteERetiradaPolpa
+                      ? 'bg-emerald-50/80 border-emerald-300'
+                      : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        cocoEtapas.corteERetiradaPolpa
+                          ? 'bg-[#0a3821] text-white'
+                          : 'border-2 border-slate-300 bg-white text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900">
+                        2. Cortes de coco para retirada da polpa
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Corte cuidadoso dos cocos, raspagem e acondicionamento da polpa fresca/congelada.
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      cocoEtapas.corteERetiradaPolpa ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {cocoEtapas.corteERetiradaPolpa ? '✓ Concluído' : 'Pendente'}
+                  </span>
+                </div>
+
+                {/* Etapa 3: Jogar o Lixo dos Cocos */}
+                <div
+                  onClick={() => handleToggleCocoSubEtapa('descarteLixoCocos')}
+                  className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                    cocoEtapas.descarteLixoCocos
+                      ? 'bg-emerald-50/80 border-emerald-300'
+                      : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        cocoEtapas.descarteLixoCocos
+                          ? 'bg-[#0a3821] text-white'
+                          : 'border-2 border-slate-300 bg-white text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900">
+                        3. Jogar o lixo dos cocos e limpeza da bancada
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Recolhimento imediato das cascas para a caçamba/lixo e higienização do chão/mesa.
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      cocoEtapas.descarteLixoCocos ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {cocoEtapas.descarteLixoCocos ? '✓ Concluído' : 'Pendente'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Fair balance meter */}
+              <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-emerald-950 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Award className="w-4 h-4 text-emerald-700" />
+                    Equilíbrio Lucas vs Rafael
+                  </span>
+                  <span className="text-slate-600">Ninguém faz mais que o outro</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <span>Lucas:</span>
+                    <span className="font-bold text-[#0a3821] font-mono text-sm">
+                      {routine.aguaDeCoco.saldoLucasLitros}L
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                    <span>Rafael:</span>
+                    <span className="font-bold text-[#0a3821] font-mono text-sm">
+                      {routine.aguaDeCoco.saldoRafaelLitros}L
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= 7. LISTA DE COMPRAS (CHARLES) ================= */}
+        {showComprasCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">7. Lista de Compras Diária</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Responsável: Charles (Levantamento de estoque e pedidos de reposição)
+                  </p>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                Charles
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-start gap-3">
+                <div
+                  onClick={handleToggleListaCompras}
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer shrink-0 mt-0.5 ${
+                    routine.listaCompras.concluido
+                      ? 'bg-emerald-600 text-white'
                       : 'border-2 border-slate-300 bg-white text-transparent'
                   }`}
                 >
                   ✓
                 </div>
-                <span className="font-bold text-xs sm:text-sm text-slate-900">
-                  Responsável: {routine.descargaKombi.responsavelNome}
-                </span>
-              </div>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  routine.descargaKombi.concluido
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-[#0a3821] text-white'
-                }`}
-              >
-                {routine.descargaKombi.concluido ? '✓ Descarregada' : 'Aguardando Chegada'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-600 pl-8">
-              Conferir caixas descarregadas da Kombi com a nota de entrega, triar frutas sensíveis e levar para a área de higienização ou bancas.
-            </p>
-          </div>
-        </div>
-
-        {/* ================= 6. PRODUÇÃO DE ÁGUA DE COCO (FEITO SOMENTE POR 1 FUNCIONÁRIO: LUCAS OU RAFAEL) ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
-                <Droplets className="w-5 h-5 text-emerald-800" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  6. Produção de Água de Coco (Lucas OU Rafael)
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Feito somente por 1 funcionário no dia — ou Lucas ou Rafael, nunca os dois
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSwapCocoResponsavel}
-                type="button"
-                title="Alternar responsável único pelo coco hoje"
-                className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <Shuffle className="w-3.5 h-3.5 text-emerald-700" />
-                Alternar: {(routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome) === 'Lucas' ? 'Passar p/ Rafael' : 'Passar p/ Lucas'}
-              </button>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-black ${
-                  routine.isSextaFeira
-                    ? 'bg-amber-400 text-emerald-950 animate-pulse'
-                    : 'bg-[#0a3821] text-white'
-                }`}
-              >
-                Meta: {routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros}L
-              </span>
-            </div>
-          </div>
-
-          {/* Operational Rule Notice */}
-          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-              <span>
-                <strong>Regra Operacional:</strong> A produção é feita exclusivamente por{' '}
-                <strong>1 funcionário</strong> (ou Lucas ou Rafael, nunca os dois no mesmo dia).
-              </span>
-            </div>
-            <span className="inline-flex items-center gap-1 font-bold text-emerald-950 bg-white border border-emerald-300 px-3 py-1.5 rounded-xl text-xs shrink-0 self-start sm:self-auto shadow-2xs">
-              Responsável Único Hoje:{' '}
-              <strong className="text-emerald-800">
-                {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
-              </strong>
-            </span>
-          </div>
-
-          {/* Target, Liters Input and Save */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-800">
-                Escalado Hoje:{' '}
-                <strong className="text-[#0a3821]">
-                  {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome}
-                </strong>{' '}
-                (Atribuição Individual)
-              </span>
-              <span className="font-mono text-emerald-800 font-bold">
-                {coconutInput >= routine.aguaDeCoco.metaMinLitros ? '✓ Meta de Litros Atingida' : 'Em Produção'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <input
-                  type="number"
-                  min="0"
-                  max="150"
-                  value={coconutInput}
-                  onChange={(e) => setCoconutInput(Number(e.target.value))}
-                  className="min-h-[44px] w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-white border border-slate-300 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Litros produzidos"
-                />
-                <span className="absolute right-3.5 top-3 text-xs font-bold text-slate-400">
-                  Litros
-                </span>
-              </div>
-              <button
-                onClick={handleSaveCocoLitros}
-                type="button"
-                className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0a3821] hover:bg-emerald-800 text-white shadow-xs active:scale-[0.98] transition-all cursor-pointer shrink-0"
-              >
-                Salvar Litragem
-              </button>
-            </div>
-
-            {/* 3 MANDATORY STAGES CHECKLIST (Large touch targets >= 48px) */}
-            <div className="pt-2 border-t border-slate-200 space-y-2.5">
-              <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider block">
-                Atividades Obrigatórias do Processo de Coco:
-              </span>
-
-              {/* Etapa 1: Produção na Garrafa */}
-              <div
-                onClick={() => handleToggleCocoSubEtapa('garrafasEnvase')}
-                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
-                  cocoEtapas.garrafasEnvase
-                    ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      cocoEtapas.garrafasEnvase
-                        ? 'bg-[#0a3821] text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm font-bold text-slate-900">
-                      1. Produção de água de coco na garrafa
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Envase limpo, lacre e refrigeração imediata ({routine.aguaDeCoco.metaMinLitros} a {routine.aguaDeCoco.metaMaxLitros} Litros).
-                    </p>
-                  </div>
+                <div>
+                  <h4 className="font-bold text-xs text-slate-900">
+                    Fechar Checagem de Faltas no Salão e Estoque
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Conferir as bancas esvaziando, preencher os itens na tabela de Compras/Reposição e enviar quantidades necessárias para compra.
+                  </p>
                 </div>
-                <span
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    cocoEtapas.garrafasEnvase ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={handleToggleListaCompras}
+                  type="button"
+                  className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    routine.listaCompras.concluido
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {cocoEtapas.garrafasEnvase ? '✓ Concluído' : 'Pendente'}
-                </span>
+                  {routine.listaCompras.concluido ? '✓ Lista Finalizada' : 'Marcar Fechada'}
+                </button>
+                <button
+                  onClick={onNavigateToPurchases}
+                  type="button"
+                  className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  Ir para Compras & Reposição
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= 8. ROTINAS EXTRAS ADICIONADAS PELA GESTÃO ================= */}
+        {showExtrasCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4 lg:col-span-2">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Layers className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    8. Rotinas Adicionais Criadas pela Gestão
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Atividades operacionais e demandas específicas cadastradas manualmente pela administração
+                  </p>
+                </div>
               </div>
 
-              {/* Etapa 2: Corte e Retirada da Polpa */}
-              <div
-                onClick={() => handleToggleCocoSubEtapa('corteERetiradaPolpa')}
-                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
-                  cocoEtapas.corteERetiradaPolpa
-                    ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
-                }`}
-              >
-                <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900">
+                  {filteredExtras.filter((r) => r.concluido).length}/{filteredExtras.length} Feitas
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddCustomModal(true)}
+                    type="button"
+                    className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-[0.98] transition-all cursor-pointer"
+                    title="Adicionar nova rotina diária (Administrador)"
+                  >
+                    <Plus className="w-4 h-4 text-emerald-700" />
+                    + Adicionar Rotina
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredExtras.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredExtras.map((item) => (
                   <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      cocoEtapas.corteERetiradaPolpa
-                        ? 'bg-[#0a3821] text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
+                    key={item.id}
+                    onClick={() => handleToggleCustomRoutine(item.id)}
+                    className={`min-h-[52px] p-3.5 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
+                      item.concluido
+                        ? 'bg-emerald-50/70 border-emerald-300'
+                        : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
                     }`}
                   >
-                    ✓
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm font-bold text-slate-900">
-                      2. Cortes de coco para retirada da polpa
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Corte cuidadoso dos cocos, raspagem e acondicionamento da polpa fresca/congelada.
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    cocoEtapas.corteERetiradaPolpa ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {cocoEtapas.corteERetiradaPolpa ? '✓ Concluído' : 'Pendente'}
-                </span>
-              </div>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                          item.concluido
+                            ? 'bg-[#0a3821] text-white'
+                            : 'border-2 border-slate-300 bg-white text-transparent'
+                        }`}
+                      >
+                        ✓
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900">{item.titulo}</h4>
+                          {item.horario && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              {item.horario}
+                            </span>
+                          )}
+                          {item.categoria && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              {item.categoria}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          Titular: <strong className="text-slate-800">{item.responsavelNome}</strong>
+                          {item.auxiliarNome && (
+                            <span>
+                              {' '}
+                              | Auxiliar: <strong className="text-slate-800">{item.auxiliarNome}</strong>
+                            </span>
+                          )}
+                          {item.observacoes && ` • ${item.observacoes}`}
+                        </p>
+                      </div>
+                    </div>
 
-              {/* Etapa 3: Jogar o Lixo dos Cocos */}
-              <div
-                onClick={() => handleToggleCocoSubEtapa('descarteLixoCocos')}
-                className={`min-h-[50px] p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 ${
-                  cocoEtapas.descarteLixoCocos
-                    ? 'bg-emerald-50/80 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-emerald-300 shadow-2xs'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      cocoEtapas.descarteLixoCocos
-                        ? 'bg-[#0a3821] text-white'
-                        : 'border-2 border-slate-300 bg-white text-transparent'
-                    }`}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          item.concluido
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {item.concluido ? '✓ Realizada' : 'Pendente'}
+                      </span>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => handleDeleteCustomRoutine(item.id, e)}
+                          type="button"
+                          title="Excluir rotina extra da gerência"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-2">
+                <p className="text-xs text-slate-600 font-medium">
+                  Nenhuma rotina extra criada manualmente para hoje.
+                </p>
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddCustomModal(true)}
+                    type="button"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0a3821] text-white hover:bg-emerald-900 cursor-pointer"
                   >
-                    ✓
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm font-bold text-slate-900">
-                      3. Jogar o lixo dos cocos e limpeza da bancada
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Recolhimento imediato das cascas para a caçamba/lixo e higienização do chão/mesa.
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    cocoEtapas.descarteLixoCocos ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {cocoEtapas.descarteLixoCocos ? '✓ Concluído' : 'Pendente'}
-                </span>
+                    <Plus className="w-3.5 h-3.5" />
+                    Criar Primeira Rotina Extra
+                  </button>
+                )}
               </div>
-            </div>
+            )}
+          </div>
+        )}
 
-            {/* Fair balance meter */}
-            <div className="pt-2 border-t border-slate-200 space-y-1.5">
-              <div className="flex items-center justify-between text-xs text-emerald-950 font-bold">
-                <span className="flex items-center gap-1">
-                  <Award className="w-4 h-4 text-emerald-700" />
-                  Equilíbrio Lucas vs Rafael
-                </span>
-                <span className="text-slate-600">Ninguém faz mais que o outro</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
-                  <span>Lucas:</span>
-                  <span className="font-bold text-[#0a3821] font-mono text-sm">
-                    {routine.aguaDeCoco.saldoLucasLitros}L
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
-                  <span>Rafael:</span>
-                  <span className="font-bold text-[#0a3821] font-mono text-sm">
-                    {routine.aguaDeCoco.saldoRafaelLitros}L
-                  </span>
-                </div>
-              </div>
+        {/* ================= EMPTY STATE IF NO CARD IS VISIBLE FOR THIS COLLABORATOR ================= */}
+        {!hasAnyCardVisible && (
+          <div className="col-span-full bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center space-y-4 shadow-xs">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-[#0a3821] flex items-center justify-center mx-auto shadow-xs">
+              <CheckCircle2 className="w-8 h-8 text-emerald-700" />
+            </div>
+            <div className="max-w-md mx-auto">
+              <h3 className="text-lg font-bold text-slate-900">
+                Nenhuma Rotina Diária Pendente Para Você Hoje!
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                Você não possui atividades fixas escaladas como titular ou auxiliar neste turno. Verifique com a gerência se é necessário apoiar algum setor específico.
+              </p>
             </div>
           </div>
-        </div>
-
-        {/* ================= 7. LISTA DE COMPRAS (CHARLES) ================= */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4 lg:col-span-2">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                <ShoppingCart className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">7. Lista de Compras Diária</h3>
-                <p className="text-[11px] text-slate-500">
-                  Responsável: Charles (Levantamento de estoque e pedidos de reposição)
-                </p>
-              </div>
-            </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-              Charles
-            </span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="flex items-start gap-3">
-              <div
-                onClick={handleToggleListaCompras}
-                className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer shrink-0 mt-0.5 ${
-                  routine.listaCompras.concluido
-                    ? 'bg-emerald-600 text-white'
-                    : 'border-2 border-slate-300 bg-white text-transparent'
-                }`}
-              >
-                ✓
-              </div>
-              <div>
-                <h4 className="font-bold text-xs text-slate-900">
-                  Fechar Checagem de Faltas no Salão e Estoque
-                </h4>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Conferir as bancas esvaziando, preencher os itens na tabela de Compras/Reposição e enviar quantidades necessárias para compra.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={handleToggleListaCompras}
-                type="button"
-                className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                  routine.listaCompras.concluido
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {routine.listaCompras.concluido ? '✓ Lista Finalizada' : 'Marcar Fechada'}
-              </button>
-              <button
-                onClick={onNavigateToPurchases}
-                type="button"
-                className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Ir para Compras & Reposição
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* ================= MODAL: ADICIONAR ROTINA DIÁRIA (GESTÃO) ================= */}
+      {showAddCustomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-[#0a3821] flex items-center justify-center font-bold">
+                  <Plus className="w-5 h-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Adicionar Nova Rotina Diária
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cadastre uma demanda rotineira com titular e auxiliar
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddCustomModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                type="button"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomRoutine} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Título da Atividade *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Higienização extra dos cestos de melancia"
+                  value={customTitulo}
+                  onChange={(e) => setCustomTitulo(e.target.value)}
+                  className="min-h-[44px] w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Responsável Titular *
+                  </label>
+                  <select
+                    value={customRespId}
+                    onChange={(e) => setCustomRespId(e.target.value)}
+                    className="min-h-[44px] w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nome} ({u.cargoDescricao || u.perfil})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Auxiliar (Opcional)
+                  </label>
+                  <select
+                    value={customAuxId}
+                    onChange={(e) => setCustomAuxId(e.target.value)}
+                    className="min-h-[44px] w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Nenhum Auxiliar</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nome} ({u.cargoDescricao || u.perfil})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Categoria / Setor
+                  </label>
+                  <select
+                    value={customCategoria}
+                    onChange={(e) => setCustomCategoria(e.target.value)}
+                    className="min-h-[44px] w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Reposição de Banca">Reposição de Banca</option>
+                    <option value="Atendimento ao Balcão">Atendimento ao Balcão</option>
+                    <option value="Limpeza de Setor">Limpeza de Setor</option>
+                    <option value="Qualidade / Validade">Qualidade / Validade</option>
+                    <option value="Freezers / Frios">Freezers / Frios</option>
+                    <option value="Produção / Grab & Go">Produção / Grab & Go</option>
+                    <option value="Administrativo">Administrativo</option>
+                    <option value="Geral">Geral</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Horário / Turno Previsto
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 14:00, Tarde, Fechamento"
+                    value={customHorario}
+                    onChange={(e) => setCustomHorario(e.target.value)}
+                    className="min-h-[44px] w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Instruções / Observações Detalhadas
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Descreva o que deve ser feito e o padrão esperado..."
+                  value={customObs}
+                  onChange={(e) => setCustomObs(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomModal(false)}
+                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="min-h-[44px] px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-[#0a3821] hover:bg-emerald-900 text-white shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+                >
+                  Salvar Rotina Diária
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (SEM WINDOW.CONFIRM) ================= */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Confirmar Exclusão da Rotina</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  Tem certeza de que deseja remover <strong>{pendingDelete.label}</strong> da rotina diária de hoje?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecutePendingDelete}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

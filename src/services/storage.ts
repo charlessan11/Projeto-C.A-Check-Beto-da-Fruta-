@@ -1,4 +1,5 @@
 import { User, Task, PurchaseItem, StoreSettings } from '../types';
+import { findUserBoundToCurrentDevice } from './deviceService';
 
 const USERS_KEY = 'betodafruta_users_v2';
 const TASKS_KEY = 'betodafruta_tasks_v2';
@@ -16,6 +17,7 @@ export const INITIAL_USERS: User[] = [
     cargoDescricao: 'Encarregado Geral',
     avatarCor: 'bg-emerald-700 text-white',
     pinCode: '1234',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-02',
@@ -25,6 +27,7 @@ export const INITIAL_USERS: User[] = [
     cargoDescricao: 'Gestão de Reposição',
     avatarCor: 'bg-teal-700 text-white',
     pinCode: '1234',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-03',
@@ -34,6 +37,7 @@ export const INITIAL_USERS: User[] = [
     cargoDescricao: 'Proprietário',
     avatarCor: 'bg-indigo-700 text-white',
     pinCode: '1234',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-04',
@@ -42,6 +46,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Reposição, Atendimento, Caixa (Suporte)',
     cargoDescricao: 'Reposição & Caixa',
     avatarCor: 'bg-sky-600 text-white',
+    pinCode: '1004',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-05',
@@ -50,6 +56,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Reposição, Atendimento, Caixa (Suporte)',
     cargoDescricao: 'Reposição & Caixa',
     avatarCor: 'bg-blue-600 text-white',
+    pinCode: '1005',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-06',
@@ -58,6 +66,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Reposição, Atendimento, Caixa',
     cargoDescricao: 'Operadora de Caixa & Reposição',
     avatarCor: 'bg-amber-600 text-white',
+    pinCode: '1006',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-07',
@@ -66,6 +76,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Produção',
     cargoDescricao: 'Produção / Grab & Go',
     avatarCor: 'bg-orange-600 text-white',
+    pinCode: '1007',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-08',
@@ -74,6 +86,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Produção',
     cargoDescricao: 'Produção / Grab & Go',
     avatarCor: 'bg-rose-600 text-white',
+    pinCode: '1008',
+    dispositivosVinculados: [],
   },
   {
     id: 'USR-09',
@@ -82,6 +96,8 @@ export const INITIAL_USERS: User[] = [
     setoresAtuacao: 'Limpeza, Auxílio em Produção',
     cargoDescricao: 'Limpeza & Auxílio Produção',
     avatarCor: 'bg-purple-600 text-white',
+    pinCode: '1009',
+    dispositivosVinculados: [],
   },
 ];
 
@@ -92,6 +108,15 @@ export const INITIAL_SETTINGS: StoreSettings = {
   horarioCheckinMatinal: '08:00',
   checkinAtivo: true,
   mensagemBoasVindas: 'Excelente turno de trabalho no Beto da Fruta! Mantenha o padrão de frescor e alinhamento visual da loja.',
+  alertasSonoros: {
+    ativo: true,
+    somConclusaoTarefa: true,
+    tomConclusao: 'campainha',
+    somLembreteRotina: true,
+    tomLembrete: 'sino_suave',
+    intervaloLembreteMinutos: 30,
+    volume: 70,
+  },
 };
 
 export const getTodayDateString = (): string => {
@@ -353,18 +378,22 @@ export const loadUsers = (): User[] => {
       localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
       return INITIAL_USERS;
     }
-    // Ensure each admin has their individual pinCode initialized
+    // Ensure every user (Admin and Operacional) has their individual pinCode and dispositivosVinculados initialized
     let updated = false;
     const usersWithPin = parsed.map((u) => {
-      if (u.perfil === 'Administrador') {
-        const storedIndividualPin = localStorage.getItem(`betodafruta_pin_${u.id}`);
-        const effectivePin = storedIndividualPin || u.pinCode || '1234';
-        if (u.pinCode !== effectivePin) {
-          u.pinCode = effectivePin;
-          updated = true;
-        }
+      const defaultUser = INITIAL_USERS.find((init) => init.id === u.id || init.nome === u.nome);
+      const storedIndividualPin = localStorage.getItem(`betodafruta_pin_${u.id}`);
+      const effectivePin =
+        storedIndividualPin || u.pinCode || defaultUser?.pinCode || '1234';
+      const nextDevices = Array.isArray(u.dispositivosVinculados) ? u.dispositivosVinculados : [];
+      if (u.pinCode !== effectivePin || !Array.isArray(u.dispositivosVinculados)) {
+        updated = true;
       }
-      return u;
+      return {
+        ...u,
+        pinCode: effectivePin,
+        dispositivosVinculados: nextDevices,
+      };
     });
     if (updated) {
       localStorage.setItem(USERS_KEY, JSON.stringify(usersWithPin));
@@ -377,6 +406,13 @@ export const loadUsers = (): User[] => {
 
 export const saveUsers = (users: User[]): void => {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  fetch('/api/state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ users }),
+  }).catch(() => {
+    // Offline fallback
+  });
 };
 
 export const getUserPin = (userId: string): string => {
@@ -384,7 +420,9 @@ export const getUserPin = (userId: string): string => {
   if (individualPin) return individualPin;
   const users = loadUsers();
   const user = users.find((u) => u.id === userId);
-  return user?.pinCode || '1234';
+  if (user?.pinCode) return user.pinCode;
+  const defaultUser = INITIAL_USERS.find((u) => u.id === userId);
+  return defaultUser?.pinCode || '1234';
 };
 
 export const updateUserPin = (userId: string, newPin: string): boolean => {
@@ -413,6 +451,14 @@ export const updateUserPin = (userId: string, newPin: string): boolean => {
 
 export const loadCurrentUser = (): User | null => {
   const users = loadUsers();
+  // 1. Priority: Check if this physical device is bound to a user profile (Auto-login for all users)
+  const boundUser = findUserBoundToCurrentDevice(users);
+  if (boundUser) {
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(boundUser));
+    return boundUser;
+  }
+
+  // 2. Fallback: Check active session in localStorage
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     if (raw) {
@@ -423,7 +469,7 @@ export const loadCurrentUser = (): User | null => {
   } catch {
     // fallback
   }
-  return null; // Return null so Login Screen is shown when no user is selected!
+  return null;
 };
 
 export const saveCurrentUser = (user: User | null): void => {
@@ -519,7 +565,14 @@ export const loadSettings = (): StoreSettings => {
       parsed.horarioCheckinMatinal = '08:00';
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...INITIAL_SETTINGS, ...parsed }));
     }
-    return { ...INITIAL_SETTINGS, ...parsed };
+    return {
+      ...INITIAL_SETTINGS,
+      ...parsed,
+      alertasSonoros: {
+        ...INITIAL_SETTINGS.alertasSonoros!,
+        ...(parsed.alertasSonoros || {}),
+      },
+    };
   } catch {
     return INITIAL_SETTINGS;
   }

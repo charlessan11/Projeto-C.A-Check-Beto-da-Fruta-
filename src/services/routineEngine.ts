@@ -3,6 +3,7 @@ import {
   RoutineExpositorAssignment,
   RoutineLimpezaItem,
   RoutineFreezerItem,
+  RoutineCustomItem,
   Task,
   User,
 } from '../types';
@@ -638,6 +639,62 @@ export function toggleAguaDeCocoEtapa(
 }
 
 
+// Management manual creation of custom daily routine
+export function addCustomRoutineItem(
+  currentRoutine: DailyRoutine,
+  item: Omit<RoutineCustomItem, 'id' | 'criadoEm'>
+): DailyRoutine {
+  const newItem: RoutineCustomItem = {
+    ...item,
+    id: `RTN-CST-${Date.now().toString().slice(-6)}`,
+    criadoEm: new Date().toISOString(),
+  };
+
+  const updated: DailyRoutine = {
+    ...currentRoutine,
+    rotinasExtras: [...(currentRoutine.rotinasExtras || []), newItem],
+    atualizadoEm: new Date().toISOString(),
+  };
+  saveDailyRoutine(updated);
+  return updated;
+}
+
+// Toggle custom routine completion
+export function toggleCustomRoutineItem(
+  currentRoutine: DailyRoutine,
+  itemId: string
+): DailyRoutine {
+  const currentList = currentRoutine.rotinasExtras || [];
+  const updatedList = currentList.map((item) =>
+    item.id === itemId ? { ...item, concluido: !item.concluido } : item
+  );
+
+  const updated: DailyRoutine = {
+    ...currentRoutine,
+    rotinasExtras: updatedList,
+    atualizadoEm: new Date().toISOString(),
+  };
+  saveDailyRoutine(updated);
+  return updated;
+}
+
+// Delete custom routine item
+export function deleteCustomRoutineItem(
+  currentRoutine: DailyRoutine,
+  itemId: string
+): DailyRoutine {
+  const currentList = currentRoutine.rotinasExtras || [];
+  const updatedList = currentList.filter((item) => item.id !== itemId);
+
+  const updated: DailyRoutine = {
+    ...currentRoutine,
+    rotinasExtras: updatedList,
+    atualizadoEm: new Date().toISOString(),
+  };
+  saveDailyRoutine(updated);
+  return updated;
+}
+
 // Sync routine tasks into system Task[] list so employees see them in their daily personal feed
 export function syncRoutineWithTaskList(routine: DailyRoutine, currentTasks: Task[]): Task[] {
   const today = routine.data;
@@ -675,6 +732,8 @@ export function syncRoutineWithTaskList(routine: DailyRoutine, currentTasks: Tas
       prioridade: '1-Crítica',
       categoria: 'Reposição de Banca',
       responsavelId: exp.responsavelId,
+      auxiliarId: exp.auxiliarId,
+      auxiliarNome: exp.auxiliarNome,
       status: exp.concluido ? 'Concluída' : 'Pendente',
       incluirNaImpressao: true,
       criadoEm: routine.atualizadoEm,
@@ -795,6 +854,27 @@ export function syncRoutineWithTaskList(routine: DailyRoutine, currentTasks: Tas
     incluirNaImpressao: true,
     criadoEm: routine.atualizadoEm,
   });
+
+  // 9. Rotinas Adicionadas Manualmente pela Gestão
+  if (routine.rotinasExtras && routine.rotinasExtras.length > 0) {
+    routine.rotinasExtras.forEach((cst) => {
+      generatedTasks.push({
+        id: `${routinePrefix}${cst.id}`,
+        dataProgramada: today,
+        tituloAtividade: `${cst.titulo}${cst.auxiliarNome ? ` (+ ${cst.auxiliarNome} auxilia)` : ''}`,
+        instrucoesDetalhadas: cst.observacoes || `Rotina diária atribuída pela gerência: ${cst.titulo}.`,
+        tipoTempo: 'Tarefa Padrão',
+        prioridade: '2-Alta',
+        categoria: (cst.categoria as any) || 'Administrativo',
+        responsavelId: cst.responsavelId,
+        auxiliarId: cst.auxiliarId,
+        auxiliarNome: cst.auxiliarNome,
+        status: cst.concluido ? 'Concluída' : 'Pendente',
+        incluirNaImpressao: true,
+        criadoEm: cst.criadoEm || routine.atualizadoEm,
+      });
+    });
+  }
 
   return [...nonRoutineTasks, ...generatedTasks];
 }

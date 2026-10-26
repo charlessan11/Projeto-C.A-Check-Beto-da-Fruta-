@@ -19,6 +19,12 @@ import {
   getTodayDateString,
 } from './services/storage';
 import { loadDailyRoutine, saveDailyRoutine, syncRoutineWithTaskList } from './services/routineEngine';
+import {
+  bindCurrentDeviceToUser,
+  unbindDeviceFromUser,
+  findUserBoundToCurrentDevice,
+  getOrCreateDeviceId,
+} from './services/deviceService';
 import { User, Task, PurchaseItem, StoreSettings, DailyRoutine } from './types';
 import { Header } from './components/Header';
 import { TaskList } from './components/TaskList';
@@ -38,6 +44,17 @@ import { PomodoroModal } from './components/PomodoroModal';
 import { DailyRoutinesTab } from './components/DailyRoutinesTab';
 import { ChangeAdminPinModal } from './components/ChangeAdminPinModal';
 import { SystemManualModal } from './components/SystemManualModal';
+import { DailyBackupModal } from './components/DailyBackupModal';
+import {
+  generateDailyBackupPayload,
+  saveDailyBackupToLocalStorage,
+  sendDailyBackupToServer,
+} from './services/backupService';
+import {
+  getEffectiveSoundSettings,
+  playTaskCompletionSound,
+  playRoutineReminderSound,
+} from './services/soundService';
 import { CheckCircle2, AlertTriangle, Sparkles, X } from 'lucide-react';
 
 export default function App() {
@@ -67,6 +84,7 @@ export default function App() {
   const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
   const [isChangePinOpen, setIsChangePinOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
 
   // Pomodoro Timer state
   const [isPomodoroOpen, setIsPomodoroOpen] = useState(false);
@@ -95,15 +113,67 @@ export default function App() {
     }, 4500);
   };
 
-  // Initialize data on mount
+  // Initialize data on mount & check device auto-login
   useEffect(() => {
     const loadedUsers = loadUsers();
     setUsers(loadedUsers);
     const loadedCurrent = loadCurrentUser();
     setCurrentUser(loadedCurrent);
-    setTasks(loadTasks());
+
+    const loadedRoutine = loadDailyRoutine();
+    setRoutine(loadedRoutine);
+
+    const initialTasks = loadTasks();
+    const syncedTasks = syncRoutineWithTaskList(loadedRoutine, initialTasks);
+    setTasks(syncedTasks);
+    saveTasks(syncedTasks);
+
     setPurchases(loadPurchases());
     setSettings(loadSettings());
+
+    // Fetch server state to sync bound devices across the store
+    fetch('/api/state')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((serverData) => {
+        if (serverData && Array.isArray(serverData.users) && serverData.users.length > 0) {
+          const localList = loadUsers();
+          // Merge server device bindings & PINs into local users
+          const mergedUsers: User[] = localList.map((localU) => {
+            const srvU = serverData.users.find(
+              (su: User) => su.id === localU.id || su.nome === localU.nome
+            );
+            if (!srvU) return localU;
+
+            const localDevs = localU.dispositivosVinculados || [];
+            const srvDevs = Array.isArray(srvU.dispositivosVinculados)
+              ? srvU.dispositivosVinculados
+              : [];
+
+            // Combine unique devices by deviceId
+            const devMap = new Map<string, any>();
+            srvDevs.forEach((d: any) => devMap.set(d.deviceId, d));
+            localDevs.forEach((d) => devMap.set(d.deviceId, d));
+
+            return {
+              ...localU,
+              pinCode: srvU.pinCode || localU.pinCode,
+              dispositivosVinculados: Array.from(devMap.values()),
+            };
+          });
+
+          setUsers(mergedUsers);
+          localStorage.setItem('betodafruta_users_v2', JSON.stringify(mergedUsers));
+
+          const autoUser = findUserBoundToCurrentDevice(mergedUsers);
+          if (autoUser) {
+            setCurrentUser(autoUser);
+            saveCurrentUser(autoUser);
+          }
+        }
+      })
+      .catch(() => {
+        // Offline mode continues using localStorage seamlessly
+      });
   }, []);
 
   // Morning check-in auto-prompt on login / session start if enabled
@@ -130,9 +200,117 @@ export default function App() {
     }
   }, [currentUser?.perfil, activeTab]);
 
+  // Automatic backup export to localStorage and server whenever tasks, purchases or routines change
+  useEffect(() => {
+    if (tasks.length === 0 && purchases.length === 0) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const payload = generateDailyBackupPayload({
+          tasks,
+          purchases,
+          routine,
+          settings,
+          currentUser,
+          tipo: 'Automatica',
+        });
+        saveDailyBackupToLocalStorage(payload);
+        sendDailyBackupToServer(payload).catch(() => {});
+      } catch (err) {
+        console.warn('Falha silenciosa no backup automático:', err);
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [tasks, purchases, routine, settings, currentUser]);
+
+  // Periodic background auto-backup every 10 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        if (tasks.length === 0 && purchases.length === 0) return;
+        const payload = generateDailyBackupPayload({
+          tasks,
+          purchases,
+          routine,
+          settings,
+          currentUser,
+          tipo: 'Automatica',
+        });
+        saveDailyBackupToLocalStorage(payload);
+        sendDailyBackupToServer(payload).catch(() => {});
+      } catch {}
+    }, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [tasks, purchases, routine, settings, currentUser]);
+
+  // Helper to trigger a routine reminder notification & sound
+  const triggerRoutineReminderAlert = (isManualTest = false) => {
+    if (!currentUser) return;
+    const todayStr = getTodayDateString();
+    const pendingForUser = tasks.filter((t) => {
+      if (t.dataProgramada !== todayStr || t.status === 'Concluída') return false;
+      if (currentUser.perfil !== 'Administrador') {
+        return t.responsavelId === currentUser.id || t.auxiliarId === currentUser.id;
+      }
+      return true;
+    });
+
+    if (pendingForUser.length > 0) {
+      if (!isManualTest) {
+        playRoutineReminderSound(settings);
+      }
+      const nextPriority = pendingForUser[0];
+      showToast(
+        `🔔 Lembrete de Rotina (${pendingForUser.length} pendente${pendingForUser.length > 1 ? 's' : ''})`,
+        `Próxima: ${nextPriority.tituloAtividade}`
+      );
+    } else if (isManualTest) {
+      showToast(
+        '🔔 Teste de Lembrete de Rotina',
+        'Parabéns! Todas as rotinas programadas para hoje já estão concluídas.'
+      );
+    }
+  };
+
+  // Periodic gentle routine reminder based on system settings
+  useEffect(() => {
+    if (!currentUser) return;
+    const soundCfg = getEffectiveSoundSettings(settings);
+    if (!soundCfg.ativo || !soundCfg.somLembreteRotina) return;
+
+    const intervalMinutes = Math.max(5, soundCfg.intervaloLembreteMinutos || 30);
+    const intervalMs = intervalMinutes * 60 * 1000;
+
+    const reminderTimer = setInterval(() => {
+      triggerRoutineReminderAlert(false);
+    }, intervalMs);
+
+    return () => clearInterval(reminderTimer);
+  }, [
+    currentUser?.id,
+    settings.alertasSonoros?.ativo,
+    settings.alertasSonoros?.somLembreteRotina,
+    settings.alertasSonoros?.intervaloLembreteMinutos,
+    settings.alertasSonoros?.tomLembrete,
+    settings.alertasSonoros?.volume,
+    tasks,
+  ]);
+
+  // Auto-sync DailyRoutine with TaskList whenever routine changes
   const handleUpdateRoutine = (updated: DailyRoutine) => {
+    const prevCompletedCount = tasks.filter((t) => t.status === 'Concluída').length;
     setRoutine(updated);
     saveDailyRoutine(updated);
+    const syncedTasks = syncRoutineWithTaskList(updated, tasks);
+    const nextCompletedCount = syncedTasks.filter((t) => t.status === 'Concluída').length;
+    setTasks(syncedTasks);
+    saveTasks(syncedTasks);
+
+    if (nextCompletedCount > prevCompletedCount) {
+      playTaskCompletionSound(settings);
+    }
   };
 
   const handleSyncRoutineWithTasks = () => {
@@ -141,7 +319,7 @@ export default function App() {
     saveTasks(updatedTasks);
     showToast(
       'Rotinas Sincronizadas!',
-      'As rotinas de hoje foram espelhadas no Quadro Geral de Tarefas.'
+      'As rotinas de hoje estão espelhadas em tempo real no Quadro Geral de Tarefas.'
     );
   };
 
@@ -182,13 +360,21 @@ export default function App() {
   // Task actions
   const handleCreateOrUpdateTask = (taskData: Partial<Task>) => {
     if (taskToEdit) {
+      const wasCompleted = taskToEdit.status === 'Concluída';
+      const isNowCompleted = taskData.status === 'Concluída';
       const updated = tasks.map((t) => (t.id === taskData.id ? ({ ...t, ...taskData } as Task) : t));
       handleSaveTasks(updated);
+      if (!wasCompleted && isNowCompleted) {
+        playTaskCompletionSound(settings);
+      }
       showToast('Atividade atualizada com sucesso!');
     } else {
       const newTask = taskData as Task;
       const updated = [newTask, ...tasks];
       handleSaveTasks(updated);
+      if (newTask.status === 'Concluída') {
+        playTaskCompletionSound(settings);
+      }
       showToast('Nova atividade operacional cadastrada!');
     }
   };
@@ -262,10 +448,8 @@ export default function App() {
     });
 
     handleSaveTasks(updated);
+    playTaskCompletionSound(settings);
 
-    // GTD Business Rule (Section 2.1):
-    // "Sempre que o colaborador finalizar uma Atividade Padrão, o sistema orienta que ele olhe a Fila de 2 Minutos
-    // e execute imediatamente o que estiver ali antes de iniciar a próxima tarefa grande."
     if (isStandardTask) {
       setJustCompletedTaskTitle(task.tituloAtividade);
       setIsGTDModalOpen(true);
@@ -280,11 +464,42 @@ export default function App() {
     setIsPomodoroOpen(true);
   };
 
-  // Logout action
-  const handleLogout = () => {
-    setCurrentUser(null);
-    saveCurrentUser(null);
-    showToast('Sessão finalizada', 'Selecione um colaborador para entrar');
+  // Unbind current device action (with confirmation dialog)
+  const handleUnbindCurrentDevice = () => {
+    if (!currentUser) return;
+    const currentDeviceId = getOrCreateDeviceId();
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Desvincular Este Aparelho',
+      message: `Deseja desvincular este aparelho do perfil de ${currentUser.nome}? No próximo acesso será solicitado o PIN de 4 dígitos.`,
+      onConfirm: () => {
+        const updatedUsers = unbindDeviceFromUser(users, currentUser.id, currentDeviceId);
+        setUsers(updatedUsers);
+        saveUsers(updatedUsers);
+        setCurrentUser(null);
+        saveCurrentUser(null);
+        setConfirmDialog(null);
+        showToast('Aparelho desvinculado!', 'Selecione um colaborador para vincular novamente.');
+      },
+    });
+  };
+
+  // Admin unbind any device from a user profile inside UserSwitcherModal
+  const handleAdminUnbindDevice = (userId: string, deviceIdToRemove: string) => {
+    const targetUser = users.find((u) => u.id === userId);
+    const updatedUsers = unbindDeviceFromUser(users, userId, deviceIdToRemove);
+    setUsers(updatedUsers);
+    saveUsers(updatedUsers);
+
+    const currentDeviceId = getOrCreateDeviceId();
+    if (userId === currentUser?.id && deviceIdToRemove === currentDeviceId) {
+      const refreshedMe = updatedUsers.find((u) => u.id === currentUser.id) || null;
+      setCurrentUser(refreshedMe);
+    }
+    showToast(
+      'Dispositivo removido!',
+      `O aparelho foi desvinculado do perfil de ${targetUser?.nome || 'colaborador'}.`
+    );
   };
 
   // Purchase actions (Tabela 3 - Simplificada para o Beto da Fruta)
@@ -340,6 +555,9 @@ export default function App() {
       return p;
     });
     handleSavePurchases(updated);
+    if (!currentState) {
+      playTaskCompletionSound(settings);
+    }
     showToast(
       !currentState ? 'Mercadoria Recebida na Loja!' : 'Marcada como Pendente de Chegada',
       'Etapa (a) do checklist direto atualizada'
@@ -361,51 +579,102 @@ export default function App() {
       return p;
     });
     handleSavePurchases(updated);
+    if (nextState) {
+      playTaskCompletionSound(settings);
+    }
     showToast(
       nextState ? 'Reposição Concluída na Banca!' : 'Reposição marcada como Pendente',
       item?.produto
     );
   };
 
-  // User switcher
-  const handleSelectUser = (user: User) => {
+  // User login & device binding (or Admin profile inspection)
+  const handleLoginAndBindUser = (user: User, customDeviceName?: string) => {
+    const { updatedUsers, updatedUser } = bindCurrentDeviceToUser(
+      users,
+      user.id,
+      customDeviceName
+    );
+    const finalUser = updatedUser || user;
+    setUsers(updatedUsers);
+    saveUsers(updatedUsers);
+    setCurrentUser(finalUser);
+    saveCurrentUser(finalUser);
+    showToast(
+      `Aparelho vinculado a ${finalUser.nome}!`,
+      'Nos próximos acessos, este dispositivo entrará automaticamente no seu perfil.'
+    );
+  };
+
+  // Admin switching profile view via UserSwitcherModal
+  const handleAdminSwitchProfile = (user: User, customDeviceName?: string) => {
+    if (customDeviceName) {
+      handleLoginAndBindUser(user, customDeviceName);
+      return;
+    }
     setCurrentUser(user);
     saveCurrentUser(user);
-    showToast(`Perfil ativo: ${user.nome}`, `Nível: ${user.perfil} (${user.setoresAtuacao || user.setorPadrao || 'Geral'})`);
+    showToast(
+      `Perfil ativo: ${user.nome}`,
+      `Nível: ${user.perfil} (${user.setoresAtuacao || user.setorPadrao || 'Geral'})`
+    );
   };
 
   const handleAddUser = (user: User) => {
     const updated = [...users, user];
     setUsers(updated);
     saveUsers(updated);
+    showToast(`Colaborador ${user.nome} cadastrado!`, `PIN inicial: ${user.pinCode || '1234'}`);
   };
 
-  // Reset to defaults
+  // Reset to defaults (with in-app confirmation modal)
   const handleResetData = () => {
-    resetToDefaults();
-    setUsers(loadUsers());
-    const initialUser = loadCurrentUser();
-    setCurrentUser(initialUser);
-    setTasks(loadTasks());
-    setPurchases(loadPurchases());
-    setSettings(loadSettings());
-    showToast('Dados restaurados para o padrão do Hortifrúti!');
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Restaurar Dados Originais',
+      message:
+        'Deseja restaurar as tarefas e listas para o estado padrão do Hortifrúti Beto da Fruta?',
+      onConfirm: () => {
+        resetToDefaults();
+        setUsers(loadUsers());
+        const initialUser = loadCurrentUser();
+        setCurrentUser(initialUser);
+        setTasks(loadTasks());
+        setPurchases(loadPurchases());
+        setSettings(loadSettings());
+        setConfirmDialog(null);
+        showToast('Dados restaurados para o padrão do Hortifrúti!');
+      },
+    });
   };
 
-  // Calculated counters
+  // Calculated counters (respecting operational isolation for non-admin users)
   const today = getTodayDateString();
   const pendingTasksCount = useMemo(() => {
-    return tasks.filter((t) => t.dataProgramada === today && t.status !== 'Concluída').length;
-  }, [tasks, today]);
+    return tasks.filter((t) => {
+      if (t.dataProgramada !== today || t.status === 'Concluída') return false;
+      if (currentUser && currentUser.perfil !== 'Administrador') {
+        return t.responsavelId === currentUser.id || t.auxiliarId === currentUser.id;
+      }
+      return true;
+    }).length;
+  }, [tasks, today, currentUser]);
 
   const twoMinTasksCount = useMemo(() => {
-    return tasks.filter(
-      (t) =>
-        t.dataProgramada === today &&
-        t.status !== 'Concluída' &&
-        t.tipoTempo === '2 Minutos (Fazer na Transição)'
-    ).length;
-  }, [tasks, today]);
+    return tasks.filter((t) => {
+      if (
+        t.dataProgramada !== today ||
+        t.status === 'Concluída' ||
+        t.tipoTempo !== '2 Minutos (Fazer na Transição)'
+      ) {
+        return false;
+      }
+      if (currentUser && currentUser.perfil !== 'Administrador') {
+        return t.responsavelId === currentUser.id || t.auxiliarId === currentUser.id;
+      }
+      return true;
+    }).length;
+  }, [tasks, today, currentUser]);
 
   const purchasesAlertCount = useMemo(() => {
     // Shows items pending arrival OR pending replenishment on the shelf
@@ -418,7 +687,7 @@ export default function App() {
       <LoginScreen
         users={users}
         tasks={tasks}
-        onSelectUser={handleSelectUser}
+        onSelectUser={handleLoginAndBindUser}
         storeName={settings.nomeLoja}
       />
     );
@@ -450,8 +719,12 @@ export default function App() {
       {/* Main Top Header */}
       <Header
         currentUser={currentUser}
-        onOpenUserSwitcher={() => setIsUserSwitcherOpen(true)}
-        onLogout={handleLogout}
+        onOpenUserSwitcher={() => {
+          if (currentUser.perfil === 'Administrador') {
+            setIsUserSwitcherOpen(true);
+          }
+        }}
+        onUnbindCurrentDevice={handleUnbindCurrentDevice}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         pendingTasksCount={pendingTasksCount}
@@ -462,6 +735,7 @@ export default function App() {
         onOpenCheckinModal={() => setIsCheckinModalOpen(true)}
         onOpenChangePin={() => setIsChangePinOpen(true)}
         onOpenManual={() => setIsManualOpen(true)}
+        onOpenBackupModal={() => setIsBackupModalOpen(true)}
         settings={settings}
         onResetData={handleResetData}
       />
@@ -534,7 +808,11 @@ export default function App() {
 
         {/* Aba 4: Auditoria & Baixas - Somente Administradores */}
         {activeTab === 'audit' && currentUser.perfil === 'Administrador' && (
-          <AuditLogView tasks={tasks} users={users} />
+          <AuditLogView
+            tasks={tasks}
+            users={users}
+            onOpenBackupModal={() => setIsBackupModalOpen(true)}
+          />
         )}
 
         {/* Aba 5: Estatísticas & Tempos - Somente Administradores */}
@@ -616,8 +894,10 @@ export default function App() {
         onClose={() => setIsUserSwitcherOpen(false)}
         users={users}
         currentUser={currentUser}
-        onSelectUser={handleSelectUser}
+        onSelectUser={handleAdminSwitchProfile}
         onAddUser={handleAddUser}
+        onUnbindDevice={handleAdminUnbindDevice}
+        onRefreshUsers={() => setUsers(loadUsers())}
       />
 
       <SettingsModal
@@ -627,8 +907,24 @@ export default function App() {
         currentUser={currentUser}
         onSave={handleSaveSettings}
         onPreviewCheckin={() => setIsCheckinModalOpen(true)}
+        onTriggerRoutineReminderTest={() => triggerRoutineReminderAlert(true)}
         onOpenChangePin={() => setIsChangePinOpen(true)}
+        onOpenBackupModal={() => setIsBackupModalOpen(true)}
       />
+
+      {/* Modal de Backup Diário e Exportação JSON (Gestão) */}
+      {currentUser && currentUser.perfil === 'Administrador' && (
+        <DailyBackupModal
+          isOpen={isBackupModalOpen}
+          onClose={() => setIsBackupModalOpen(false)}
+          tasks={tasks}
+          purchases={purchases}
+          routine={routine}
+          settings={settings}
+          currentUser={currentUser}
+          onShowToast={showToast}
+        />
+      )}
 
       <CheckinWelcomeModal
         isOpen={isCheckinModalOpen}
@@ -642,16 +938,17 @@ export default function App() {
         onConfirmCheckin={handleConfirmCheckin}
       />
 
-      {/* Modal para Alterar Senha de Administrador (PIN Individual) */}
-      {currentUser && currentUser.perfil === 'Administrador' && (
+      {/* Modal para Alterar PIN Individual (Todos os Colaboradores) */}
+      {currentUser && (
         <ChangeAdminPinModal
           isOpen={isChangePinOpen}
           onClose={() => setIsChangePinOpen(false)}
           currentUser={currentUser}
           onSuccess={() => {
+            setUsers(loadUsers());
             showToast(
-              'Senha de Administrador alterada com sucesso!',
-              `A nova senha de 4 dígitos foi salva individualmente para ${currentUser.nome}.`
+              'PIN Individual alterado com sucesso!',
+              `A nova senha de 4 dígitos foi salva para ${currentUser.nome}.`
             );
           }}
         />
@@ -703,7 +1000,7 @@ export default function App() {
                 onClick={confirmDialog.onConfirm}
                 className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Confirmar Exclusão
+                Confirmar
               </button>
             </div>
           </div>

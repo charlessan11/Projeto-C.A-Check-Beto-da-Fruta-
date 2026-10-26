@@ -1,6 +1,42 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        var NativeWebSocket = window.WebSocket;
+        if (NativeWebSocket) {
+          var PatchedWebSocket = function (url, protocols) {
+            var isViteHmr =
+              protocols === 'vite-hmr' ||
+              protocols === 'vite-ping' ||
+              (Array.isArray(protocols) &&
+                (protocols.indexOf('vite-hmr') !== -1 || protocols.indexOf('vite-ping') !== -1));
+            if (isViteHmr) {
+              var target = new EventTarget();
+              target.readyState = 1;
+              target.OPEN = 1;
+              target.CONNECTING = 0;
+              target.CLOSING = 2;
+              target.CLOSED = 3;
+              target.url = String(url || '');
+              target.protocol = typeof protocols === 'string' ? protocols : 'vite-hmr';
+              target.send = function () {};
+              target.close = function () {};
+              return target;
+            }
+            return protocols !== undefined
+              ? new NativeWebSocket(url, protocols)
+              : new NativeWebSocket(url);
+          };
+          PatchedWebSocket.prototype = NativeWebSocket.prototype;
+          PatchedWebSocket.CONNECTING = NativeWebSocket.CONNECTING;
+          PatchedWebSocket.OPEN = NativeWebSocket.OPEN;
+          PatchedWebSocket.CLOSING = NativeWebSocket.CLOSING;
+          PatchedWebSocket.CLOSED = NativeWebSocket.CLOSED;
+          window.WebSocket = PatchedWebSocket;
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#15803d" />

@@ -62,13 +62,15 @@ export const ChangeAdminPinModal: React.FC<ChangeAdminPinModalProps> = ({
               <KeyRound className="w-5 h-5 text-emerald-300" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Alterar Senha do Administrador</h3>
-              <p className="text-xs text-emerald-200/90">{currentUser.nome} (Acesso Individual)</p>
+              <h3 className="text-base font-bold text-white">Alterar Meu PIN Individual</h3>
+              <p className="text-xs text-emerald-200/90">
+                {currentUser.nome} ({currentUser.perfil})
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10"
+            className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -79,10 +81,10 @@ export const ChangeAdminPinModal: React.FC<ChangeAdminPinModalProps> = ({
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs">
             <p className="font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-emerald-700" />
-              Segurança Individual
+              PIN de Segurança do Seu Perfil &amp; Aparelho
             </p>
             <p className="mt-0.5 text-amber-800 text-[11px]">
-              A nova senha de 4 dígitos será válida <strong>apenas para o perfil de {currentUser.nome}</strong>. Os outros administradores continuam com suas próprias senhas.
+              A nova senha de 4 dígitos será válida <strong>exclusivamente para {currentUser.nome}</strong> para vincular novos aparelhos ao seu perfil.
             </p>
           </div>
 

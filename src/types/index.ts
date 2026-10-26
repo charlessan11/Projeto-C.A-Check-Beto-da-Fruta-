@@ -1,5 +1,13 @@
 export type UserProfile = 'Administrador' | 'Operacional';
 
+export interface RegisteredDevice {
+  deviceId: string;
+  nomeAparelho: string;
+  plataforma: string;
+  vinculadoEm: string;
+  ultimoAcesso: string;
+}
+
 export interface User {
   id: string; // USR-01, USR-02...
   nome: string;
@@ -9,7 +17,8 @@ export interface User {
   cargoDescricao?: string;
   setorPadrao?: string; // Compatibilidade com formulários de edição
   email?: string;
-  pinCode?: string; // PIN de 4 dígitos para Administradores (Padrão: 1234)
+  pinCode?: string; // PIN individual de 4 dígitos para todos os colaboradores
+  dispositivosVinculados?: RegisteredDevice[]; // Aparelhos salvos no perfil do usuário
 }
 
 export type TipoTempo = 'Tarefa Padrão' | '2 Minutos (Fazer na Transição)';
@@ -32,6 +41,8 @@ export interface Task {
   prioridade: Prioridade;
   categoria: CategoriaTarefa;
   responsavelId: string;
+  auxiliarId?: string;
+  auxiliarNome?: string;
   status: StatusTarefa;
   dataHoraConclusao?: string; // ISO string
   concluidoPorId?: string;
@@ -85,6 +96,19 @@ export interface PurchaseItem {
   dataAtualizacao: string;
 }
 
+export type CompletionTone = 'campainha' | 'cristal' | 'harpa' | 'acorde';
+export type ReminderTone = 'sino_suave' | 'pulso_zen' | 'toque_discreto';
+
+export interface SoundAlertSettings {
+  ativo: boolean;
+  somConclusaoTarefa: boolean;
+  tomConclusao: CompletionTone;
+  somLembreteRotina: boolean;
+  tomLembrete: ReminderTone;
+  intervaloLembreteMinutos: number;
+  volume: number; // 0 a 100
+}
+
 export interface StoreSettings {
   nomeLoja: string;
   gerenteResponsavel: string;
@@ -93,6 +117,7 @@ export interface StoreSettings {
   checkinAtivo: boolean;
   mensagemBoasVindas?: string;
   unidade?: string;
+  alertasSonoros?: SoundAlertSettings;
 }
 
 // Estrutura de Rotinas Diárias Obrigatórias do Hortifrúti Beto da Fruta
@@ -200,7 +225,24 @@ export interface DailyRoutine {
     observacoes?: string;
   };
 
+  // 8. Rotinas e Atividades Adicionadas Manualmente pela Gestão
+  rotinasExtras?: RoutineCustomItem[];
+
   atualizadoEm: string;
+}
+
+export interface RoutineCustomItem {
+  id: string;
+  titulo: string;
+  responsavelId: string;
+  responsavelNome: string;
+  auxiliarId?: string;
+  auxiliarNome?: string;
+  categoria?: string;
+  observacoes?: string;
+  horario?: string;
+  concluido: boolean;
+  criadoEm: string;
 }
 
 

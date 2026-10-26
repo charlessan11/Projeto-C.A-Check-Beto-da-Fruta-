@@ -1,110 +1,80 @@
-# Importação Inteligente c/ IA & Planilha Impressa de Prancheta (Uso Duplo)
+# Plano de Implementação — Auditoria de Erros e Login Automático por Dispositivo
 
-Calibração do processamento com IA (Gemini 3.8 Flash) e do motor local baseada no **modelo real de mensagem do WhatsApp do Hortifrúti Beto da Fruta** (enviada por Charles e Amanda), com suporte a categorias por blocos (`*Hortifruti:*`, `*Bomboniere:*`, `*Hortaliças:*`), frações (`1/2cx`, `1/2sc`), quantidades coladas na unidade (`1cx`, `1sc`, `16un`), números puros (`15 Couve`, `5 Alface`), unidades regionais (`1 Bola de Coentro`), itens sem quantidade e **Planilha Impressa A4 de Prancheta para Uso Duplo (Ceasa e Conferência na Loja)**.
-
----
-
-## Revisão do Usuário & Decisões Confirmadas
-
-> [!IMPORTANT]
-> **Padrão Real de Mensagem Confirmado:**
-> 1. **Asteriscos Opcionais**: Charles costuma colocar asteriscos nos títulos (`*Hortifruti:*`, `*Bomboniere:*`), enquanto Amanda envia sem asteriscos (`Hortifruti:`, `Hortaliças:`). O sistema trata ambos de forma transparente e flexível.
-> 2. **Categorização Automática por Seções**: As linhas de título definem a categoria dos produtos que vêm abaixo até a próxima seção (`Hortifrúti`, `Bomboniere`, `Hortaliças`, `Frutas`, etc.).
-> 3. **Quantidades Fracionadas**: Suporte nativo a `1/2cx` (meia caixa) e `1/2sc` (meio saco) sem quebrar o nome do produto.
-> 4. **Quantidades Coladas ou Sem Espaço**: Reconhecimento de `1cx`, `1sc`, `16un`, `60kg`, `40kg`, `1fd` e também `1 cx`, `1 sc`.
-> 5. **Números sem Unidade Explícita**: Linhas como `5 Alface Americano`, `15 Couve`, `5 Cebolinha` e unidades regionais de feira como `1 Bola de Coentro`.
-> 6. **Itens Sem Quantidade**: Linhas como `Tomate Cereja`, `Repolho Branco`, `Banana Prata`, `Banana Comprida`, `Paçoca Gigante`, `Brownie Evaristo` são preservadas com quantidade pendente `""` e sinalizadas com destaque âmbar `⚠️ Sem Quantidade` para revisão ágil.
-> 7. **Folha Impressa de Prancheta A4 de Uso Duplo**: O comprador leva a folha ao Ceasa para cotação e compra, e Lucas/Rafael utilizam **esse mesmo impresso** no descarregamento da Kombi para conferir o que chegou.
+## 1. Visão Geral do Objetivo
+Realizar uma correção abrangente de inconsistências técnicas identificadas em todo o projeto e implementar o **Vínculo Inteligente de Dispositivos por Perfil com Login Automático** para todos os usuários cadastrados no Beto da Fruta (**Administradores**: Charles, Amanda e Beto; **Operacionais**: Lucas, Rafael, Bianca, Adriana, Vanessa e Rita).
 
 ---
 
-## 1. Visão Geral & Casos de Teste Reais
+## 2. Diagnóstico Completo do Projeto & Correções Planejadas
 
-### Mapeamento do Exemplo Real Fornecido:
+Durante a auditoria de ponta a ponta do código, foram identificados os seguintes problemas e pontos de melhoria que serão resolvidos:
 
-| Texto Original na Mensagem | Quantidade Identificada | Produto Padronizado | Categoria Atribuída | Observação / Status |
-| :--- | :---: | :--- | :--- | :--- |
-| `*Hortifruti:*` | — | *(Início do Bloco)* | Hortifrúti | Seção / Categoria |
-| `- 1cx Uva Vitória` | **1 cx** | Uva Vitória | Hortifrúti (Frutas) | Quantidade antes |
-| `- 1cx Maçã Nacional Fuji` | **1 cx** | Maçã Nacional Fuji | Hortifrúti (Frutas) | Quantidade antes |
-| `- 1cx Laranja Pokan ou Paulistinha` | **1 cx** | Laranja Pokan ou Paulistinha | Hortifrúti (Frutas) | Nome composto |
-| `- 1/2cx Tomate Maduro` | **1/2 cx** | Tomate Maduro | Hortifrúti (Legumes) | **Fração de caixa** |
-| `- Tomate Cereja` | *(Vazio)* | Tomate Cereja | Hortifrúti (Legumes) | **⚠️ Sem Quantidade** |
-| `- Repolho Branco` | *(Vazio)* | Repolho Branco | Hortifrúti (Legumes) | **⚠️ Sem Quantidade** |
-| `- Banana Prata` | *(Vazio)* | Banana Prata | Hortifrúti (Frutas) | **⚠️ Sem Quantidade** |
-| `- 16un Melancia` | **16 un** | Melancia | Hortifrúti (Frutas) | Unidades |
-| `- 60kg Melão Espanhol` | **60 kg** | Melão Espanhol | Hortifrúti (Frutas) | Peso em kg |
-| `- 1sc Batata Doce Vitória` | **1 sc** | Batata Doce Vitória | Hortifrúti (Legumes) | Saco |
-| `- 1/2sc Inhame` | **1/2 sc** | Inhame | Hortifrúti (Legumes) | **Fração de saco** |
-| `- 1/2sc Cará` | **1/2 sc** | Cará | Hortifrúti (Legumes) | **Fração de saco** |
-| `*Bomboniere:*` | — | *(Início do Bloco)* | Bomboniere | Nova Categoria |
-| `- Paçoca Gigante` | *(Vazio)* | Paçoca Gigante | Bomboniere | **⚠️ Sem Quantidade** |
-| `- 1fd Pipoca Bokus 30g` | **1 fd** | Pipoca Bokus 30g | Bomboniere | Fardo |
-| `*Hortaliças:*` | — | *(Início do Bloco)* | Hortaliças | Nova Categoria |
-| `- 5 Alface Americano` | **5 un** / **5** | Alface Americano | Hortaliças | Quantidade numeral |
-| `- 1 Bola de Coentro` | **1 bola** | Coentro | Hortaliças | Unidade regional |
-| `- 15 Couve` | **15 maços** / **15** | Couve | Hortaliças | Quantidade numeral |
+1. **Bloqueio de Diálogos Nativos (`window.confirm` / `window.alert`)**:
+   - **Problema**: Em `DailyRoutinesTab.tsx` (exclusão de rotinas manuais e restauração de turno) e `PurchaseList.tsx` / `Header.tsx`, o uso de `confirm()` nativo do navegador falha ou é bloqueado em ambientes WebView/iFrame e celulares.
+   - **Correção**: Substituir todos os `confirm()` por botões de confirmação visual em duas etapas ("Confirmar?" / "Cancelar") ou modais próprios integrados na interface.
+
+2. **Falta de Sincronização Automática entre "Rotinas Diárias" e "Quadro de Tarefas"**:
+   - **Problema**: Quando um colaborador marca uma atividade como concluída na aba **Rotinas Diárias** ou quando a gestão adiciona uma rotina manual, a aba **Quadro de Tarefas** só atualiza se alguém clicar manualmente no botão "Sincronizar c/ Quadro".
+   - **Correção**: Automatizar a sincronização bidirecional em `App.tsx` e `DailyRoutinesTab.tsx` para que qualquer alteração em rotinas diárias atualize imediatamente o Quadro de Tarefas e o Relatório WhatsApp.
+
+3. **Visibilidade de Tarefas Compartilhadas (Auxiliar) no Quadro de Tarefas**:
+   - **Problema**: Na aba **Rotinas Diárias**, o colaborador auxiliar (ex: **Bianca** no Expositor C com **Rafael**, ou em rotinas extras) já vê sua atividade. Porém, ao converter para o **Quadro de Tarefas** (`Task`), o objeto `Task` guarda apenas `responsavelId` (titular), ocultando a tarefa para o auxiliar naquela aba.
+   - **Correção**: Adicionar o campo `auxiliarId?: string` na interface `Task` (`src/types/index.ts`), propagá-lo no `syncRoutineWithTaskList` (`src/services/routineEngine.ts`) e atualizar o filtro em `src/components/TaskList.tsx` para exibir tarefas onde o colaborador logado seja titular **ou** auxiliar.
+
+4. **Isolamento de Troca de Perfil para Colaboradores Operacionais**:
+   - **Problema**: O cabeçalho (`Header.tsx`) permite que colaboradores operacionais abram o modal `UserSwitcherModal` e troquem livremente para o perfil de outro colega.
+   - **Correção**: Bloquear a troca livre de perfil para usuários operacionais (**Lucas, Rafael, Bianca, Adriana, Vanessa e Rita**). Apenas Administradores (**Charles, Amanda e Beto**) terão acesso ao painel de alternância rápida e gestão de perfis/dispositivos.
+
+5. **Persistência e Sincronização de Estado entre Dispositivos (`server.ts`)**:
+   - **Problema**: Os vínculos de dispositivos e atualizações de perfis ficavam restritos apenas ao `localStorage` isolado de cada navegador.
+   - **Correção**: Criar um servidor Express integrado com Vite (`server.ts`) com endpoints REST (`/api/state`, `/api/devices/bind`, `/api/devices/unbind`) e persistência em arquivo JSON no servidor, mantendo `localStorage` como cache rápido e garantindo que os aparelhos vinculados por cada colaborador fiquem visíveis para os administradores em tempo real.
 
 ---
 
-## 2. Experiência do Usuário & Fluxo Operacional
+## 3. Vínculo de Dispositivos por Perfil & Login Automático
 
-```
-┌────────────────────────────────────────────────────────┐
-│  1. Entrada de Texto (WhatsApp Charles ou Amanda)       │
-│     - Suporte a títulos com/sem asteriscos:            │
-│       *Hortifruti:*, Bomboniere:, Hortaliças:          │
-│     - Botão de exemplo real adicionado:                │
-│       "Exemplo Real Charles & Amanda"                  │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│  2. Motor Duplo de Extração (Gemini 3.8 + Fallback)     │
-│     - Reconhece 1/2cx, 1/2sc, 1cx, 16un, 60kg         │
-│     - Reconhece numerais puros: 5 Alface, 15 Couve     │
-│     - Preserva itens sem quantidade: Tomate Cereja     │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│  3. Tela de Conferência Prévia                         │
-│     - Aba "Sem Quantidade (N)" com destaque âmbar      │
-│     - Chips rápidos: [+ 1/2 cx] [+ 1 cx] [+ 1/2 sc]    │
-│     - Atribuição de fornecedor em lote                 │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│  4. Impressão A4 de Prancheta para Uso Duplo           │
-│     - Comprador leva ao Ceasa para cotar e comprar     │
-│     - Lucas e Rafael conferem no mesmo impresso        │
-│     - Baixa digital em 1 clique: "Tudo Conforme"       │
-└────────────────────────────────────────────────────────┘
-```
+### 3.1. Identificação Única do Aparelho e Registro no Perfil
+- **Identificador de Dispositivo (`DeviceId`)**:
+  - Cada aparelho/navegador receberá um identificador único persistente (`betodafruta_device_id`) salvo localmente, acompanhado de metadados legíveis do aparelho (ex: `"Android • Chrome"`, `"iPhone • Safari"`, `"Computador Windows • Edge"`), data/hora do vínculo e último acesso.
+- **Estrutura no Perfil do Usuário (`User`)**:
+  - Manter o campo existente `pinCode` em `User` (`src/types/index.ts`) para todos os usuários e adicionar `dispositivosVinculados?: RegisteredDevice[]` contendo `{ deviceId, nomeAparelho, plataforma, vinculadoEm, ultimoAcesso }`.
+- **Colaboradores Oficiais do Sistema e PINs Iniciais Padrão (Editáveis pela Gestão)**:
+  - **Administradores**:
+    - **Charles** (`USR-01` — Encarregado Geral): PIN `1234`
+    - **Amanda** (`USR-02` — Gestão de Reposição): PIN `1234`
+    - **Beto** (`USR-03` — Proprietário): PIN `1234`
+  - **Operacionais**:
+    - **Lucas** (`USR-04` — Reposição & Caixa): PIN `1004`
+    - **Rafael** (`USR-05` — Reposição & Caixa): PIN `1005`
+    - **Bianca** (`USR-06` — Operadora de Caixa & Reposição): PIN `1006`
+    - **Adriana** (`USR-07` — Produção / Grab & Go): PIN `1007`
+    - **Vanessa** (`USR-08` — Produção / Grab & Go): PIN `1008`
+    - **Rita** (`USR-09` — Limpeza & Auxílio Produção): PIN `1009`
+  - A gestão poderá visualizar e alterar o `pinCode` de qualquer colaborador no modal de Gestão de Equipe.
 
----
+### 3.2. Fluxo de Primeiro Acesso e Login Automático
+1. **Primeiro Acesso no Aparelho**:
+   - O usuário seleciona seu perfil na tela inicial (`LoginScreen.tsx`) e digita seu **PIN individual de 4 dígitos (`pinCode`)**.
+   - Ao autenticar com sucesso, o sistema **vincula automaticamente aquele dispositivo ao perfil do usuário** (salvando no perfil do usuário e no servidor) e exibe uma confirmação de aparelho vinculado.
+2. **Próximos Acessos (Login Automático para Todos os Usuários)**:
+   - Sempre que o aplicativo for aberto naquele dispositivo (seja por um Administrador — Charles, Amanda, Beto — ou por um Colaborador Operacional — Lucas, Rafael, Bianca, Adriana, Vanessa, Rita), o sistema verifica o `deviceId` atual.
+   - Encontrando o vínculo ativo no perfil do usuário, **entra diretamente e automaticamente na conta daquele usuário sem pedir o PIN novamente**, levando-o direto para suas atividades.
+   - Um indicador discreto no cabeçalho mostrará `"Aparelho Vinculado"` com o nome do colaborador.
 
-## 3. Decisões de Arquitetura & Implementação
-
-### Decisão 1: Ajuste de Expressões Regulares no Backend (`server.ts`)
-- **Frações**: Suporte explícito a `1/2`, `1/4`, `3/4` e números decimais (`0.5`, `1,5`).
-  Regex atualizada para capturar: `((?:1\/2|1\/4|3\/4|\d+(?:[.,]\d+)?)\s*(?:cx|cxs|sc|sacos?|kg|un|unid|bdj|dz|fd|rl|bola|maço|maços)?)\s+(.*)`.
-- **Seções e Categorias**: Reconhecimento dinâmico de cabeçalhos de bloco com ou sem asteriscos (`*Hortifruti:*`, `Hortifruti:`, `*Bomboniere:*`, `*Hortaliças:*`). Todos os itens seguintes herdam a categoria até a próxima seção.
-- **Quantidades numéricas puras**: Para hortaliças e itens contáveis (ex.: `5 Alface`, `15 Couve`, `5 Cebolinha`), o numeral inicial é extraído como quantidade (`5 un` ou `5 maços`).
-
-### Decisão 2: Chips Específicos para Frações no Modal (`PurchaseAiImportModal.tsx`)
-- Adição dos chips rápidos de fração solicitados pelo padrão Ceasa:
-  `[+ 1/2 cx]`, `[+ 1 cx]`, `[+ 1/2 sc]`, `[+ 1 sc]`, `[+ 5 cx]`, `[+ 10 cx]`, `[+ 5 maços]`.
-- Botão pré-configurado no modal: **"Carregar Exemplo Real Beto da Fruta"** para demonstração e teste imediato.
-
-### Decisão 3: Manutenção do Formato de Prancheta A4 de Uso Duplo
-- Garantia de que todos os produtos (incluindo Bomboniere e Hortaliças) sejam impressos organizados por categoria na folha de prancheta, facilitando o percurso do comprador no Ceasa e a conferência na loja.
+### 3.3. Gestão de Dispositivos Vinculados (Exclusivo para Administradores)
+- No modal **Gerenciar Colaboradores e Dispositivos** (`UserSwitcherModal.tsx` acessível pela Gestão):
+  - Exibirá a lista de aparelhos vinculados no perfil de cada colaborador (nome do aparelho, sistema operacional e data do último acesso).
+  - Permitirá ao administrador **remover/desvincular aparelhos** de um colaborador (caso o funcionário troque de celular) ou editar o PIN de 4 dígitos (`pinCode`) do colaborador.
+  - Caso o próprio usuário precise desconectar seu aparelho, o botão **"Desvincular Aparelho"** exigirá confirmação para liberar o dispositivo.
 
 ---
 
-## 4. Próximos Passos (Após Aprovação do Plano)
-
-1. Atualizar o regex e o prompt do backend em `server.ts` para cobrir perfeitamente frações (`1/2cx`, `1/2sc`), cabeçalhos com/sem asteriscos (`*Hortifruti:*`, `*Bomboniere:*`) e números puros.
-2. Adicionar os botões de preenchimento rápido fracionado (`1/2 cx`, `1/2 sc`) e o botão de exemplo real no `PurchaseAiImportModal.tsx`.
-3. Executar compilação e validação do fluxo completo.
+## 4. Arquivos a Serem Criados ou Modificados
+- `src/types/index.ts` — Inclusão de `RegisteredDevice` e `dispositivosVinculados?: RegisteredDevice[]` em `User`, além de `auxiliarId?: string` em `Task`.
+- `src/services/deviceService.ts` *(Novo)* — Geração e leitura do `deviceId`, detecção amigável do modelo/sistema do aparelho (Android, iPhone, Desktop) e verificação de vínculo automático.
+- `server.ts` *(Novo)* e `package.json` — API backend para sincronizar usuários, dispositivos vinculados, tarefas, rotinas e compras entre os aparelhos da equipe.
+- `src/services/storage.ts` — Migração automática dos colaboradores oficiais (Charles, Amanda, Beto, Lucas, Rafael, Bianca, Adriana, Vanessa e Rita) com seus `pinCode` individuais, persistência dos dispositivos vinculados por perfil e sincronização com a API `/api/state`.
+- `src/components/LoginScreen.tsx` — Fluxo de autenticação com PIN de 4 dígitos para todos os usuários no primeiro vínculo e redirecionamento automático quando o dispositivo já estiver reconhecido.
+- `src/components/Header.tsx` — Ocultação da troca de perfil para colaboradores operacionais, indicador de dispositivo vinculado e substituição de `confirm()` nativo.
+- `src/components/UserSwitcherModal.tsx` — Painel para administradores gerenciarem colaboradores, `pinCode` individuais e lista de dispositivos vinculados por perfil (com opção de desvincular aparelhos).
+- `src/components/DailyRoutinesTab.tsx`, `src/components/TaskList.tsx`, `src/services/routineEngine.ts` e `src/App.tsx` — Sincronização automática em tempo real entre Rotinas Diárias e Quadro de Tarefas, suporte a `auxiliarId` no Quadro de Tarefas e remoção de todos os `confirm()` nativos.

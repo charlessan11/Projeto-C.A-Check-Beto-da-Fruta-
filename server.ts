@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -320,13 +321,279 @@ Retorne rigorosamente em formato JSON estruturado conforme o schema.`;
   }
 });
 
+const DATA_FILE_PATH = path.resolve(__dirname, 'data-store.json');
+const BACKUPS_DIR = path.resolve(__dirname, 'backups');
+
+if (!fs.existsSync(BACKUPS_DIR)) {
+  try {
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+  } catch (err) {
+    console.error('Erro ao criar diretório de backups:', err);
+  }
+}
+
+interface ServerStore {
+  users?: any[];
+  tasks?: any[];
+  purchases?: any[];
+  routine?: any;
+  settings?: any;
+  lastDailyBackup?: any;
+  updatedAt?: string;
+}
+
+function readServerStore(): ServerStore {
+  try {
+    if (fs.existsSync(DATA_FILE_PATH)) {
+      const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error('Erro ao ler data-store.json:', err);
+  }
+  return {};
+}
+
+function writeServerStore(data: ServerStore): void {
+  try {
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Erro ao salvar data-store.json:', err);
+  }
+}
+
+// GET /api/state — Returns server-persisted users (with device bindings), tasks, purchases, routine
+app.get('/api/state', (_req, res) => {
+  const store = readServerStore();
+  res.json(store);
+});
+
+// POST /api/state — Syncs state from client to server
+app.post('/api/state', (req, res) => {
+  try {
+    const current = readServerStore();
+    const { users, tasks, purchases, routine, settings } = req.body || {};
+    const next: ServerStore = {
+      users: Array.isArray(users) ? users : current.users,
+      tasks: Array.isArray(tasks) ? tasks : current.tasks,
+      purchases: Array.isArray(purchases) ? purchases : current.purchases,
+      routine: routine || current.routine,
+      settings: settings || current.settings,
+      updatedAt: new Date().toISOString(),
+    };
+    writeServerStore(next);
+    res.json({ ok: true, updatedAt: next.updatedAt });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Erro ao sincronizar estado' });
+  }
+});
+
+// POST /api/devices/bind — Binds a device to a user profile on the server
+app.post('/api/devices/bind', (req, res) => {
+  try {
+    const { userId, device } = req.body || {};
+    if (!userId || !device || !device.deviceId) {
+      return res.status(400).json({ error: 'userId e device.deviceId são obrigatórios.' });
+    }
+
+    const store = readServerStore();
+    if (Array.isArray(store.users)) {
+      store.users = store.users.map((u: any) => {
+        const list = Array.isArray(u.dispositivosVinculados) ? u.dispositivosVinculados : [];
+        if (u.id === userId) {
+          const filtered = list.filter((d: any) => d.deviceId !== device.deviceId);
+          return {
+            ...u,
+            dispositivosVinculados: [device, ...filtered],
+          };
+        } else {
+          return {
+            ...u,
+            dispositivosVinculados: list.filter((d: any) => d.deviceId !== device.deviceId),
+          };
+        }
+      });
+      store.updatedAt = new Date().toISOString();
+      writeServerStore(store);
+    }
+
+    return res.json({ ok: true, users: store.users || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Falha ao vincular dispositivo' });
+  }
+});
+
+// POST /api/devices/unbind — Unbinds a device from a user profile on the server
+app.post('/api/devices/unbind', (req, res) => {
+  try {
+    const { userId, deviceId } = req.body || {};
+    if (!userId || !deviceId) {
+      return res.status(400).json({ error: 'userId e deviceId são obrigatórios.' });
+    }
+
+    const store = readServerStore();
+    if (Array.isArray(store.users)) {
+      store.users = store.users.map((u: any) => {
+        if (u.id === userId) {
+          const list = Array.isArray(u.dispositivosVinculados) ? u.dispositivosVinculados : [];
+          return {
+            ...u,
+            dispositivosVinculados: list.filter((d: any) => d.deviceId !== deviceId),
+          };
+        }
+        return u;
+      });
+      store.updatedAt = new Date().toISOString();
+      writeServerStore(store);
+    }
+
+    return res.json({ ok: true, users: store.users || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Falha ao desvincular dispositivo' });
+  }
+});
+
+// POST /api/backup — Receives automatic or manual daily backup from client
+app.post('/api/backup', (req, res) => {
+  try {
+    const { date, payload } = req.body || {};
+    const safeDate = (date || (payload && payload.metadados && payload.metadados.dataBackup) || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+    const filename = `backup-betodafruta-${safeDate}.json`;
+    const filePath = path.join(BACKUPS_DIR, filename);
+
+    if (payload) {
+      fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(BACKUPS_DIR, 'latest.json'), JSON.stringify(payload, null, 2), 'utf-8');
+
+      // Update in data-store.json
+      const store = readServerStore();
+      store.lastDailyBackup = {
+        date: safeDate,
+        filename,
+        savedAt: new Date().toISOString(),
+        resumo: payload.metadados?.resumo,
+      };
+      writeServerStore(store);
+
+      return res.json({
+        ok: true,
+        filename,
+        savedAt: store.lastDailyBackup.savedAt,
+      });
+    }
+
+    return res.status(400).json({ error: 'Payload de backup ausente' });
+  } catch (err: any) {
+    console.error('Erro ao processar /api/backup:', err);
+    return res.status(500).json({ error: err?.message || 'Falha ao salvar backup no servidor' });
+  }
+});
+
+// GET /api/backups — List all available daily backups on the server
+app.get('/api/backups', (_req, res) => {
+  try {
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      return res.json({ backups: [] });
+    }
+    const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.startsWith('backup-') && f.endsWith('.json'));
+    const list = files.map((filename) => {
+      const filePath = path.join(BACKUPS_DIR, filename);
+      const stat = fs.statSync(filePath);
+      const dateMatch = filename.match(/backup-betodafruta-([\d-]+)\.json/);
+      const date = dateMatch ? dateMatch[1] : '';
+      return {
+        filename,
+        date,
+        sizeBytes: stat.size,
+        updatedAt: stat.mtime.toISOString(),
+      };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+
+    return res.json({ backups: list });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Erro ao listar backups' });
+  }
+});
+
+// GET /api/backup/download — Directly downloads the daily JSON file
+app.get('/api/backup/download', (req, res) => {
+  try {
+    const rawDate = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+    const safeDate = rawDate.replace(/[^0-9-]/g, '');
+    const filename = `backup-betodafruta-${safeDate}.json`;
+    const targetPath = path.join(BACKUPS_DIR, filename);
+
+    if (fs.existsSync(targetPath)) {
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.sendFile(targetPath);
+    }
+
+    // Fallback: if specific date file not found on disk, build from current server store
+    const store = readServerStore();
+    const fallbackPayload = {
+      metadados: {
+        versao: '2.0',
+        dataBackup: safeDate,
+        dataHoraGeracao: new Date().toISOString(),
+        loja: store.settings?.nomeLoja || 'Beto da Fruta',
+        gerenteResponsavel: store.settings?.gerenteResponsavel || 'Charles Araújo',
+        tipoExportacao: 'Servidor Snapshot',
+        resumo: {
+          totalAtividadesDia: Array.isArray(store.tasks) ? store.tasks.length : 0,
+          totalItensComprasDia: Array.isArray(store.purchases) ? store.purchases.length : 0,
+        },
+      },
+      atividadesDoDia: store.tasks || [],
+      rotinaDiaria: store.routine || null,
+      comprasDoDia: store.purchases || [],
+    };
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.send(JSON.stringify(fallbackPayload, null, 2));
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Erro ao baixar backup' });
+  }
+});
+
+// GET /api/backup — Returns latest backup payload or for a specific date
+app.get('/api/backup', (req, res) => {
+  try {
+    const rawDate = req.query.date as string | undefined;
+    if (rawDate) {
+      const safeDate = rawDate.replace(/[^0-9-]/g, '');
+      const targetPath = path.join(BACKUPS_DIR, `backup-betodafruta-${safeDate}.json`);
+      if (fs.existsSync(targetPath)) {
+        const raw = fs.readFileSync(targetPath, 'utf-8');
+        return res.json(JSON.parse(raw));
+      }
+    }
+
+    const latestPath = path.join(BACKUPS_DIR, 'latest.json');
+    if (fs.existsSync(latestPath)) {
+      const raw = fs.readFileSync(latestPath, 'utf-8');
+      return res.json(JSON.parse(raw));
+    }
+
+    const store = readServerStore();
+    if (store.lastDailyBackup) {
+      return res.json(store.lastDailyBackup);
+    }
+
+    return res.status(404).json({ error: 'Nenhum backup encontrado' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Erro ao buscar backup' });
+  }
+});
+
 // Setup Vite middleware for Development or Static serving for Production
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

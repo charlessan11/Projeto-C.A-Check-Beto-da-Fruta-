@@ -96,8 +96,13 @@ export const TaskList: React.FC<TaskListProps> = ({
       if (statusFilter === 'ativas' && task.status === 'Concluída') return false;
       if (statusFilter === 'concluidas' && task.status !== 'Concluída') return false;
 
-      // User filter
-      if (selectedUserFilter !== 'todos' && task.responsavelId !== selectedUserFilter) {
+      // User filter (Operational users strictly see only their own assigned tasks as primary or auxiliary)
+      const effectiveUserFilter = isAdmin ? selectedUserFilter : currentUser.id;
+      if (
+        effectiveUserFilter !== 'todos' &&
+        task.responsavelId !== effectiveUserFilter &&
+        task.auxiliarId !== effectiveUserFilter
+      ) {
         return false;
       }
 
@@ -253,30 +258,28 @@ export const TaskList: React.FC<TaskListProps> = ({
             </select>
           </div>
 
-          {/* Responsible Filter */}
-          <div className="flex items-center gap-1">
-            <span className="text-slate-500 font-medium">Responsável:</span>
-            <select
-              value={selectedUserFilter}
-              onChange={(e) => setSelectedUserFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 font-medium"
-            >
-              <option value="todos">Toda a Equipe</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.nome} {u.id === currentUser.id ? '(Eu)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!isAdmin && selectedUserFilter !== currentUser.id && (
-            <button
-              onClick={() => setSelectedUserFilter(currentUser.id)}
-              className="text-emerald-700 hover:text-emerald-800 font-semibold underline ml-auto text-xs cursor-pointer"
-            >
-              Ver Somente Minhas Tarefas
-            </button>
+          {/* Responsible Filter (Only admins can view/switch between team members) */}
+          {isAdmin ? (
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 font-medium">Responsável:</span>
+              <select
+                value={selectedUserFilter}
+                onChange={(e) => setSelectedUserFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 font-medium cursor-pointer"
+              >
+                <option value="todos">Toda a Equipe</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome} {u.id === currentUser.id ? '(Eu)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-950 font-bold rounded-lg border border-emerald-200 text-xs">
+              <span className="text-emerald-700 font-medium">Minhas Atividades:</span>
+              <span className="font-black text-emerald-950">{currentUser.nome}</span>
+            </div>
           )}
         </div>
       </div>
@@ -580,9 +583,14 @@ export const TaskList: React.FC<TaskListProps> = ({
                         <div className="text-left sm:text-right">
                           <p className="text-xs font-semibold text-slate-900 leading-tight">
                             {resp?.nome}
+                            {task.auxiliarNome ? ` + ${task.auxiliarNome}` : ''}
                           </p>
                           <p className="text-[10px] text-slate-500">
-                            {isMine ? 'Você (Executor)' : resp?.cargoDescricao || resp?.setoresAtuacao?.split(',')[0]}
+                            {isMine
+                              ? 'Você (Titular)'
+                              : task.auxiliarId === currentUser.id
+                              ? 'Você (Auxiliar)'
+                              : resp?.cargoDescricao || resp?.setoresAtuacao?.split(',')[0]}
                           </p>
                         </div>
                       </div>

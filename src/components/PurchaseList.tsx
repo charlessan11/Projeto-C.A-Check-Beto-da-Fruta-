@@ -162,9 +162,6 @@ export const PurchaseList: React.FC<PurchaseListProps> = ({
 
   // Fast Conference: "Chegou Tudo Conforme o Pedido"
   const handleQuickReceiveAll = () => {
-    if (!confirm(`Confirmar que todos os ${aguardandoChegadaCount} produtos pendentes chegaram na loja conforme pedido (Conferido por ${activeChecker})?`)) {
-      return;
-    }
     const updated = purchases.map((p) => {
       if (!p.mercadoriaRecebida) {
         return {

@@ -10,17 +10,18 @@ import {
   RotateCcw,
   Store,
   ChevronDown,
-  Sparkles,
+  Smartphone,
   BarChart3,
   Settings,
   Sun,
-  Clock,
   LogOut,
   CalendarCheck,
   KeyRound,
   BookOpen,
   Menu,
-  X,
+  Unlink,
+  Database,
+  Bell,
 } from 'lucide-react';
 import { User, StoreSettings } from '../types';
 import { AndroidInstallButton } from './AndroidInstallButton';
@@ -29,6 +30,7 @@ interface HeaderProps {
   currentUser: User;
   onOpenUserSwitcher: () => void;
   onLogout?: () => void;
+  onUnbindCurrentDevice?: () => void;
   activeTab: 'rotinas' | 'tasks' | 'purchases' | 'audit' | 'stats';
   setActiveTab: (tab: 'rotinas' | 'tasks' | 'purchases' | 'audit' | 'stats') => void;
   pendingTasksCount: number;
@@ -40,6 +42,7 @@ interface HeaderProps {
   onOpenCheckinModal: () => void;
   onOpenChangePin?: () => void;
   onOpenManual?: () => void;
+  onOpenBackupModal?: () => void;
   settings: StoreSettings;
   onResetData: () => void;
 }
@@ -48,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onOpenUserSwitcher,
   onLogout,
+  onUnbindCurrentDevice,
   activeTab,
   setActiveTab,
   pendingTasksCount,
@@ -58,6 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCheckinModal,
   onOpenChangePin,
   onOpenManual,
+  onOpenBackupModal,
   settings,
   onResetData,
 }) => {
@@ -79,21 +84,34 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenUserSwitcher}
-              className="flex items-center gap-1.5 bg-emerald-800/80 hover:bg-emerald-700/80 text-white px-2.5 py-0.5 rounded-lg border border-emerald-600/40 text-xs font-semibold cursor-pointer transition-all"
-              title="Trocar perfil de funcionário"
-            >
-              {isAdmin ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-200 bg-emerald-900/70 px-2 py-0.5 rounded-md border border-emerald-700/50">
+              <Smartphone className="w-3 h-3 text-emerald-300" />
+              <span>Aparelho Vinculado</span>
+            </span>
+
+            {isAdmin ? (
+              <button
+                onClick={onOpenUserSwitcher}
+                className="flex items-center gap-1.5 bg-emerald-800/80 hover:bg-emerald-700/80 text-white px-2.5 py-0.5 rounded-lg border border-emerald-600/40 text-xs font-semibold cursor-pointer transition-all"
+                title="Gerenciar Colaboradores e Dispositivos (Acesso Admin)"
+              >
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-              ) : (
+                <span>
+                  {currentUser.nome} ({currentUser.perfil})
+                </span>
+                <ChevronDown className="w-3 h-3 text-emerald-300 ml-0.5" />
+              </button>
+            ) : (
+              <div
+                className="flex items-center gap-1.5 bg-emerald-900/60 text-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-700/40 text-xs font-semibold"
+                title="Perfil vinculado a este aparelho"
+              >
                 <UserIcon className="w-3.5 h-3.5 text-emerald-300" />
-              )}
-              <span>
-                {currentUser.nome} ({currentUser.perfil})
-              </span>
-              <ChevronDown className="w-3 h-3 text-emerald-300 ml-0.5" />
-            </button>
+                <span>
+                  {currentUser.nome} ({currentUser.perfil})
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -160,28 +178,42 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* User switcher pill */}
-              <button
-                onClick={onOpenUserSwitcher}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs transition-colors text-slate-800 font-semibold cursor-pointer"
-                title="Trocar perfil de funcionário"
-              >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${currentUser.avatarCor}`}>
-                  {currentUser.nome.charAt(0)}
-                </div>
-                <span>{currentUser.nome}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-              </button>
-
-              {/* Logout */}
-              {onLogout && (
+              {/* Backup Diário button (Administradores) */}
+              {onOpenBackupModal && isAdmin && (
                 <button
-                  onClick={onLogout}
-                  className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-xl transition-colors cursor-pointer"
-                  title="Sair / Voltar para a Tela de Seleção de Funcionários"
+                  onClick={onOpenBackupModal}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-[#0a3d24] border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  title="Exportação e Backup Diário (JSON) de Atividades e Compras"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <Database className="w-4 h-4 text-[#0a3d24]" />
+                  <span>Backup Diário</span>
                 </button>
+              )}
+
+              {/* User badge (Only admins can open switcher) */}
+              {isAdmin ? (
+                <button
+                  onClick={onOpenUserSwitcher}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs transition-colors text-slate-800 font-semibold cursor-pointer"
+                  title="Gerenciar Colaboradores e Dispositivos Vinculados"
+                >
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${currentUser.avatarCor}`}>
+                    {currentUser.nome.charAt(0)}
+                  </div>
+                  <span>{currentUser.nome}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              ) : (
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 font-bold"
+                  title="Perfil vinculado a este dispositivo"
+                >
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${currentUser.avatarCor}`}>
+                    {currentUser.nome.charAt(0)}
+                  </div>
+                  <span>{currentUser.nome}</span>
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
+                </div>
               )}
 
               {/* Settings Dropdown */}
@@ -197,17 +229,43 @@ export const Header: React.FC<HeaderProps> = ({
                 {showSettingsDropdown && (
                   <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 text-xs">
                     <div className="px-3 py-1.5 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100 mb-1">
-                      Opções &amp; Configurações
+                      Opções &amp; Dispositivo
                     </div>
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => {
+                            onOpenUserSwitcher();
+                            setShowSettingsDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-emerald-950 flex items-center gap-2 cursor-pointer font-bold"
+                        >
+                          <UserCheck className="w-4 h-4 text-[#0a3d24]" />
+                          Equipe &amp; Aparelhos Vinculados
+                        </button>
+                        {onOpenBackupModal && (
+                          <button
+                            onClick={() => {
+                              onOpenBackupModal();
+                              setShowSettingsDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-emerald-950 flex items-center gap-2 cursor-pointer font-bold"
+                          >
+                            <Database className="w-4 h-4 text-[#0a3d24]" />
+                            Exportar / Backup Diário (JSON)
+                          </button>
+                        )}
+                      </>
+                    )}
                     <button
                       onClick={() => {
                         onOpenSettingsModal();
                         setShowSettingsDropdown(false);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 text-slate-800 flex items-center gap-2 cursor-pointer font-medium"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-amber-50 text-slate-900 flex items-center gap-2 cursor-pointer font-bold"
                     >
-                      <Settings className="w-4 h-4 text-[#0a3d24]" />
-                      Configurações Operacionais
+                      <Bell className="w-4 h-4 text-amber-600" />
+                      Configurações &amp; Alertas Sonoros
                     </button>
                     <button
                       onClick={() => {
@@ -219,17 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <Sun className="w-4 h-4 text-amber-500" />
                       Abrir Briefing Matinal
                     </button>
-                    <button
-                      onClick={() => {
-                        onOpenUserSwitcher();
-                        setShowSettingsDropdown(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 text-slate-800 flex items-center gap-2 cursor-pointer font-medium"
-                    >
-                      <UserCheck className="w-4 h-4 text-[#0a3d24]" />
-                      Gerenciar Colaboradores
-                    </button>
-                    {isAdmin && onOpenChangePin && (
+                    {onOpenChangePin && (
                       <button
                         onClick={() => {
                           onOpenChangePin();
@@ -238,7 +286,7 @@ export const Header: React.FC<HeaderProps> = ({
                         className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-emerald-950 flex items-center gap-2 cursor-pointer font-bold"
                       >
                         <KeyRound className="w-4 h-4 text-[#0a3d24]" />
-                        Alterar Minha Senha (PIN)
+                        Alterar Meu PIN (4 dígitos)
                       </button>
                     )}
                     {onOpenManual && (
@@ -254,16 +302,30 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     )}
                     <div className="my-1 border-t border-slate-100" />
-                    <button
-                      onClick={() => {
-                        onResetData();
-                        setShowSettingsDropdown(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-700 flex items-center gap-2 cursor-pointer font-medium"
-                    >
-                      <RotateCcw className="w-4 h-4 text-rose-500" />
-                      Restaurar Dados Originais
-                    </button>
+                    {onUnbindCurrentDevice && (
+                      <button
+                        onClick={() => {
+                          onUnbindCurrentDevice();
+                          setShowSettingsDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-700 flex items-center gap-2 cursor-pointer font-semibold"
+                      >
+                        <Unlink className="w-4 h-4 text-rose-600" />
+                        Desvincular Este Aparelho
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          onResetData();
+                          setShowSettingsDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-700 flex items-center gap-2 cursor-pointer font-medium"
+                      >
+                        <RotateCcw className="w-4 h-4 text-rose-500" />
+                        Restaurar Dados Originais
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -375,13 +437,20 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 className="text-sm font-black text-white leading-tight truncate">
                 {settings.nomeLoja}
               </h1>
-              <button
-                onClick={onOpenUserSwitcher}
-                className="flex items-center gap-1 text-[11px] text-emerald-200 hover:text-white font-medium truncate cursor-pointer"
-              >
-                <span>{currentUser.nome}</span>
-                <ChevronDown className="w-3 h-3 text-emerald-300" />
-              </button>
+              {isAdmin ? (
+                <button
+                  onClick={onOpenUserSwitcher}
+                  className="flex items-center gap-1 text-[11px] text-emerald-200 hover:text-white font-medium truncate cursor-pointer"
+                >
+                  <span>{currentUser.nome} (Admin)</span>
+                  <ChevronDown className="w-3 h-3 text-emerald-300" />
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-[11px] text-emerald-200 font-medium truncate">
+                  <Smartphone className="w-3 h-3 text-emerald-300 shrink-0" />
+                  <span>{currentUser.nome} • Aparelho Vinculado</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -416,20 +485,22 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* Mobile Settings Dropdown */}
               {showSettingsDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 text-xs">
+                <div className="absolute right-0 mt-2 w-60 bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 text-xs">
                   <div className="px-3 py-1.5 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100 mb-1">
-                    Menu Rápido
+                    Menu Rápido ({currentUser.nome})
                   </div>
-                  <button
-                    onClick={() => {
-                      onOpenUserSwitcher();
-                      setShowSettingsDropdown(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 font-semibold text-slate-800"
-                  >
-                    <UserCheck className="w-4 h-4 text-[#0a3d24]" />
-                    Trocar Colaborador
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        onOpenUserSwitcher();
+                        setShowSettingsDropdown(false);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 font-bold text-slate-800"
+                    >
+                      <UserCheck className="w-4 h-4 text-[#0a3d24]" />
+                      Equipe &amp; Aparelhos Vinculados
+                    </button>
+                  )}
                   {onOpenManual && (
                     <button
                       onClick={() => {
@@ -442,7 +513,7 @@ export const Header: React.FC<HeaderProps> = ({
                       Manual do Sistema
                     </button>
                   )}
-                  {isAdmin && onOpenChangePin && (
+                  {onOpenChangePin && (
                     <button
                       onClick={() => {
                         onOpenChangePin();
@@ -451,7 +522,7 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-[#0a3d24] flex items-center gap-2 font-bold"
                     >
                       <KeyRound className="w-4 h-4 text-[#0a3d24]" />
-                      Alterar PIN Admin
+                      Alterar Meu PIN (4 dígitos)
                     </button>
                   )}
                   <button
@@ -459,34 +530,48 @@ export const Header: React.FC<HeaderProps> = ({
                       onOpenSettingsModal();
                       setShowSettingsDropdown(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 text-slate-800 font-medium"
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-amber-50 flex items-center gap-2 text-slate-900 font-bold"
                   >
-                    <Settings className="w-4 h-4 text-slate-600" />
-                    Configurações
+                    <Bell className="w-4 h-4 text-amber-600" />
+                    Configurações &amp; Alertas Sonoros
                   </button>
                   {isAdmin && (
-                    <button
-                      onClick={() => {
-                        setActiveTab('audit');
-                        setShowSettingsDropdown(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 text-slate-800 font-medium"
-                    >
-                      <History className="w-4 h-4 text-slate-600" />
-                      Auditoria &amp; Baixas
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          setActiveTab('audit');
+                          setShowSettingsDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 text-slate-800 font-medium"
+                      >
+                        <History className="w-4 h-4 text-slate-600" />
+                        Auditoria &amp; Baixas
+                      </button>
+                      {onOpenBackupModal && (
+                        <button
+                          onClick={() => {
+                            onOpenBackupModal();
+                            setShowSettingsDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 flex items-center gap-2 text-emerald-950 font-bold"
+                        >
+                          <Database className="w-4 h-4 text-emerald-700" />
+                          Backup Diário (JSON)
+                        </button>
+                      )}
+                    </>
                   )}
                   <div className="my-1 border-t border-slate-100" />
-                  {onLogout && (
+                  {onUnbindCurrentDevice && (
                     <button
                       onClick={() => {
-                        onLogout();
+                        onUnbindCurrentDevice();
                         setShowSettingsDropdown(false);
                       }}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-700 flex items-center gap-2 font-bold"
                     >
-                      <LogOut className="w-4 h-4" />
-                      Sair
+                      <Unlink className="w-4 h-4" />
+                      Desvincular Este Aparelho
                     </button>
                   )}
                 </div>
