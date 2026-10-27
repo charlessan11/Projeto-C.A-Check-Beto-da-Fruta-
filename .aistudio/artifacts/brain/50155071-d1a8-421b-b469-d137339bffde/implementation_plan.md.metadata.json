@@ -1,6 +1,6 @@
 {
-  "summary":  "Plano de implementação atualizado com os nomes reais dos colaboradores existentes no projeto (Charles, Amanda, Beto, Lucas, Rafael, Bianca, Adriana, Vanessa e Rita) e correções gerais do sistema.",
-  "updatedAt":  "2026-10-25T12:14:32.585682232Z",
+  "summary":  "Plano de implementação atualizado incluindo: (1) Extração determinística e categorização automática editável da lista real de compras via texto livre (sem perder quantidades coladas como 1cx, 1sc, 16Un e mantendo em branco itens sem número), e (2) Correção definitiva da impressão paginada A4 do Espelho de Conferência de Mercadorias e da Folha de Atividades para eliminar a duplicação da 1ª folha em 4 páginas e exibir todos os itens da lista em múltiplas páginas reais.",
+  "updatedAt":  "2026-10-27T02:14:17.096636247Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

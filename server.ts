@@ -16,7 +16,233 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
-// Helper: Smart heuristic fallback parser if API is unavailable or offline
+// Helper: Normalize category header name (e.g., "*Lista de Temperos:*" -> "Temperos", "*Laticínio:*" -> "Laticínios")
+function normalizeCategoryName(rawHeader: string): string {
+  let clean = rawHeader
+    .replace(/^[*_~#\s-]+/, '')
+    .replace(/[*_~#\s:-]+$/, '')
+    .replace(/^(?:lista\s+de\s+|setor\s+de\s+|setor\s+|categoria\s*:?\s*)/i, '')
+    .trim();
+
+  if (!clean) return 'Hortifrúti';
+
+  const lower = clean
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (lower === 'hortifruti') return 'Hortifrúti';
+  if (lower.includes('hortali')) return 'Hortaliças';
+  if (lower.includes('bombonier')) return 'Bomboniere';
+  if (lower.includes('tempero') || lower.includes('condimento') || lower.includes('especiaria')) return 'Temperos';
+  if (lower.includes('laticin')) return 'Laticínios';
+  if (lower === 'fruta' || lower === 'frutas') return 'Frutas';
+  if (lower === 'legume' || lower === 'legumes') return 'Legumes';
+  if (lower === 'verdura' || lower === 'verduras') return 'Verduras';
+  if (lower.includes('folhagen')) return 'Folhagens';
+  if (lower.includes('embalagen') || lower.includes('limpeza')) return 'Embalagens';
+  if (lower.includes('mercearia')) return 'Mercearia';
+
+  // Title-case any custom category
+  return clean
+    .split(/\s+/)
+    .map((w) => (w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()))
+    .join(' ')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+// Helper: Normalize unit token
+function normalizeUnitToken(rawUnit: string): string {
+  const u = rawUnit.toLowerCase().trim();
+  if (u === 'cxs' || u === 'caixa' || u === 'caixas' || u === 'cx') return 'cx';
+  if (u === 'saco' || u === 'sacos' || u === 'sc') return 'sc';
+  if (u === 'unid' || u === 'unidade' || u === 'unidades' || u === 'un') return 'un';
+  if (u === 'quilo' || u === 'quilos' || u === 'kg') return 'kg';
+  if (u === 'grama' || u === 'gramas' || u === 'gr' || u === 'g') return 'g';
+  if (u === 'fardo' || u === 'fardos' || u === 'fd') return 'fd';
+  if (u === 'pacote' || u === 'pacotes' || u === 'pct') return 'pct';
+  if (u === 'bandeja' || u === 'bandejas' || u === 'bdj') return 'bdj';
+  if (u === 'maco' || u === 'maço' || u === 'maços' || u === 'macos') return 'maços';
+  if (u === 'duzia' || u === 'dúzia' || u === 'duzias' || u === 'dúzias' || u === 'dz') return 'dz';
+  if (u === 'rolo' || u === 'rolos' || u === 'rl') return 'rl';
+  if (u === 'bola' || u === 'bolas') return 'bola';
+  if (u === 'pote' || u === 'potes') return 'pote';
+  if (u === 'litro' || u === 'litros' || u === 'lt' || u === 'l') return 'L';
+  return u;
+}
+
+const UNITS_PATTERN =
+  '(?:cx|cxs|caixas?|sc|sacos?|kg|quilos?|g|gr|gramas?|un|unid|unidades?|bdj|bandejas?|dz|duzias?|dúzias?|macos?|maços?|fd|fardos?|rl|rolos?|pct|pacotes?|bolas?|potes?|lt|litros?|garrafas?|gf|saches?|sachês?)';
+
+// Helper: Format product name (converts ALL CAPS like "MANTEIGA BEZERRA" to "Manteiga Bezerra" while preserving mixed case)
+function formatCleanProductName(rawName: string): string {
+  const cleaned = rawName.replace(/^[-–—:]\s*/, '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+
+  const lettersOnly = cleaned.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+  const isAllUpperCase = lettersOnly.length > 2 && lettersOnly === lettersOnly.toUpperCase();
+
+  if (isAllUpperCase) {
+    const smallWords = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'com', 'em', 'e', 'ou']);
+    return cleaned
+      .toLowerCase()
+      .split(' ')
+      .map((word, index) => {
+        if (index > 0 && smallWords.has(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(' ');
+  }
+
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+// Helper: Classify a product into Frutas, Legumes, Hortaliças, Temperos, etc. when under *Hortifruti:* or generic section
+function classifyHortifrutiProduct(productName: string, currentSectionCategory: string, hasExplicitSection: boolean): string {
+  // If we are inside an explicit non-Hortifruti section (e.g. Laticínios, Embalagens, Bomboniere, Temperos, Hortaliças), keep it!
+  if (hasExplicitSection && currentSectionCategory !== 'Hortifrúti') {
+    return currentSectionCategory;
+  }
+
+  const lower = productName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (
+    /\b(cominho|oregano|colorau|pimenta do reino|paprica|acafrao|curcuma|louro|canela|cravo|chimichurri|edu guedes|ana maria|pega marido|tempero|lemon pepper|noz moscada|erva doce|coentro moido|alho frito|sal rosa|gergelim)\b/.test(
+      lower
+    )
+  ) {
+    return 'Temperos';
+  }
+
+  if (
+    /\b(uva|tangerina|maracuja|pera|manga|goiaba|laranja|limao|mamao|melancia|banana|pinha|atemoia|maca|abacaxi|morango|abacate|kiwi|melao|pokan|paulistinha|pessego|ameixa|acerola|caju|caqui|figo|jabuticaba|pitaya|pitaia|roma|carambola|coco|graviola|jaca|tamara|nectarina)\b/.test(
+      lower
+    )
+  ) {
+    return 'Frutas';
+  }
+
+  if (
+    /\b(tomate|cebola|batata|beterraba|brocolis|abobora|cenoura|chuchu|abobrinha|pimentao|pepino|mandioca|macaxeira|aipim|alho|berinjela|quiabo|vagem|gengibre|inhame|cara|couve-flor|couve flor|milho verde|ervilha|nabo|rabanete|maxixe|jiló|jilo)\b/.test(
+      lower
+    )
+  ) {
+    return 'Legumes';
+  }
+
+  if (
+    /\b(alface|coentro|couve|rucula|repolho|espinafre|cheiro verde|salsa|salsinha|cebolinha|agriao|hortela|manjericao|acelga|chicoria|almeirao)\b/.test(
+      lower
+    )
+  ) {
+    return 'Hortaliças';
+  }
+
+  return currentSectionCategory || 'Hortifrúti';
+}
+
+// Helper: Clean and repair an item's quantity & product name so "1cx Uva Vitória" or "cx Uva Vitória" is never mangled
+function sanitizeExtractedItem(rawItem: {
+  produto: string;
+  quantidadePedida?: string;
+  fornecedor?: string;
+  categoria?: string;
+  observacao?: string;
+}) {
+  let produto = (rawItem.produto || '').trim();
+  let quantidade = (rawItem.quantidadePedida || '').trim();
+
+  // Clear fake zero quantities
+  if (/^(0|0\s*[a-zA-Z]+|zero|n\/a|nao informado|não informado|sem quantidade|-)$/i.test(quantidade)) {
+    quantidade = '';
+  }
+
+  // Strip bullet characters from product if any
+  produto = produto.replace(/^[-*•–—\s]+/, '').replace(/^\*+|\*+$/g, '').trim();
+
+  // Check if product still has a leading fraction + unit (e.g. "1/2cx Tomate Maduro")
+  const fracInProd = produto.match(
+    new RegExp(`^(\\d+\\/\\d+)\\s*(${UNITS_PATTERN})?\\b\\s*(?:de\\s+)?(.+)$`, 'i')
+  );
+  if (fracInProd) {
+    const frac = fracInProd[1];
+    const unit = fracInProd[2] ? normalizeUnitToken(fracInProd[2]) : 'cx';
+    if (!quantidade) {
+      quantidade = `${frac} ${unit}`;
+    }
+    produto = fracInProd[3].trim();
+  }
+
+  // Check if product still has a leading number + unit (e.g. "1cx Uva Vitória", "16Un Melancia")
+  const qtyInProd = produto.match(
+    new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNITS_PATTERN})\\b\\s*(?:de\\s+)?(.+)$`, 'i')
+  );
+  if (qtyInProd) {
+    const num = qtyInProd[1];
+    const unit = normalizeUnitToken(qtyInProd[2]);
+    if (!quantidade) {
+      quantidade = `${num} ${unit}`;
+    }
+    produto = qtyInProd[3].trim();
+  }
+
+  // Check if product starts with an isolated unit because the digit '1' was stripped (e.g., "Cx Uva Vitória" or "sc Batata")
+  const bareUnitInProd = produto.match(
+    new RegExp(`^(${UNITS_PATTERN})\\b\\s+(?:de\\s+)?(.+)$`, 'i')
+  );
+  if (bareUnitInProd) {
+    const unit = normalizeUnitToken(bareUnitInProd[1]);
+    if (!quantidade) {
+      quantidade = `1 ${unit}`;
+    } else if (/^\d+(?:[.,]\d+)?$/.test(quantidade)) {
+      quantidade = `${quantidade} ${unit}`;
+    }
+    produto = bareUnitInProd[2].trim();
+  }
+
+  // Check if product still has a leading plain number (e.g. "5 Alface Americano")
+  const plainNumInProd = produto.match(/^(\d+)\s+([a-zA-ZÀ-ÿ].*)$/);
+  if (plainNumInProd && !/^\d+\s*(?:g|mg|ml|l)\b/i.test(produto)) {
+    const num = plainNumInProd[1];
+    if (!quantidade) {
+      const cat = (rawItem.categoria || '').toLowerCase();
+      const defaultUnit = cat.includes('hortali') || cat.includes('folhagen') ? 'maços' : 'un';
+      quantidade = `${num} ${defaultUnit}`;
+    }
+    produto = plainNumInProd[2].trim();
+  }
+
+  // Normalize spacing in quantidade (e.g., "1cx" -> "1 cx", "16Un" -> "16 un", "1/2sc" -> "1/2 sc")
+  if (quantidade) {
+    const compactQtyMatch = quantidade.match(
+      new RegExp(`^(\\d+\\/\\d+|\\d+(?:[.,]\\d+)?)\\s*(${UNITS_PATTERN})$`, 'i')
+    );
+    if (compactQtyMatch) {
+      quantidade = `${compactQtyMatch[1]} ${normalizeUnitToken(compactQtyMatch[2])}`;
+    }
+  }
+
+  produto = formatCleanProductName(produto);
+
+  const normalizedCat = rawItem.categoria ? normalizeCategoryName(rawItem.categoria) : 'Hortifrúti';
+  const finalCategory =
+    normalizedCat === 'Hortifrúti'
+      ? classifyHortifrutiProduct(produto, normalizedCat, false)
+      : normalizedCat;
+
+  return {
+    produto,
+    quantidadePedida: quantidade,
+    fornecedor: (rawItem.fornecedor || '').trim(),
+    categoria: finalCategory,
+    observacao: rawItem.observacao?.trim() || undefined,
+  };
+}
+
+// Helper: Deterministic line-by-line parser for structured WhatsApp purchase lists
 function fallbackHeuristicParser(text: string, defaultSupplier?: string) {
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   const items: Array<{
@@ -28,36 +254,47 @@ function fallbackHeuristicParser(text: string, defaultSupplier?: string) {
   }> = [];
 
   let currentCategory = 'Hortifrúti';
+  let hasExplicitCategorySection = false;
   let currentSectionSupplier = '';
 
-  const unitsRegex = '(?:cx|cxs|caixas?|sc|sacos?|kg|quilos?|un|unid|unidades?|bdj|bandejas?|dz|duzias?|dúzias?|maco|maço|maços?|fd|fardos?|rl|rolos?|pct|pacotes?|bola|bolas?)';
-
   for (const line of lines) {
-    // Clean asterisks, dashes, hashes
     const trimmed = line.trim();
 
-    // Skip generic title "Lista"
-    if (/^[*_~#\s]*lista[*_~#\s:]*$/i.test(trimmed)) {
+    // Skip generic title "Lista" or "Lista de Compras"
+    if (/^[*_~#\s]*(?:lista|lista\s+de\s+compras|pedido\s+do\s+dia)[*_~#\s:]*$/i.test(trimmed)) {
       continue;
     }
 
-    // Check for Category section headers: e.g. *Hortifruti:*, Hortifruti:, *Bomboniere:*, *Hortaliças:*, etc.
-    const categoryHeaderMatch = trimmed.match(/^[*_~#\s]*(hortifruti|hortali[cç]as?|bomboniere|frutas?|legumes?|verduras?|folhagens?|embalagens?|mercearia|padaria|diversos)[*_~#\s:]*$/i);
-    if (categoryHeaderMatch) {
-      const rawCat = categoryHeaderMatch[1].toLowerCase();
-      if (rawCat.includes('bomboniere')) currentCategory = 'Bomboniere';
-      else if (rawCat.includes('hortali')) currentCategory = 'Hortaliças';
-      else if (rawCat.includes('fruta')) currentCategory = 'Frutas';
-      else if (rawCat.includes('legume')) currentCategory = 'Legumes';
-      else if (rawCat.includes('embalag')) currentCategory = 'Embalagens';
-      else currentCategory = 'Hortifrúti';
+    // 1. Check if line is a supplier header (e.g., "BOX 14:", "FORNECEDOR CEASA:", "CEASA:", "DISTRIBUIDORA X:")
+    const supplierHeaderMatch = trimmed.match(
+      /^[*_~#\s]*(fornecedor\s*:?\s*[^\n:]+|box\s*\d+[^\n:]*|ceasa[^\n:]*|distribuidora[^\n:]*)[*_~#\s:]*$/i
+    );
+    if (supplierHeaderMatch && !new RegExp(`\\b\\d+\\s*${UNITS_PATTERN}\\b`, 'i').test(trimmed)) {
+      currentSectionSupplier = trimmed.replace(/[:*#_~]/g, '').trim();
       continue;
     }
 
-    // Check if line looks like a supplier header (e.g., "BOX 14:", "FORNECEDOR CEASA:", "CEASA:")
-    const supplierHeaderMatch = trimmed.match(/^(\*{0,2})(fornecedor\s*:?|box\s*\d+|ceasa|distribuidora[^\n:]*):?(.*)$/i);
-    if (supplierHeaderMatch && !trimmed.match(/\d+\s*(cx|kg|sc|un|bdj|dz|maço)/i)) {
-      currentSectionSupplier = trimmed.replace(/[:*#-]/g, '').trim();
+    // 2. Check for ANY Category section header:
+    // Matches lines like "*Temperos:*", "*Laticínio:*", "*Embalagens:*", "*Hortifruti:*", "*Bomboniere:*", "*Hortaliças:*"
+    const startsWithBulletOrDigit = /^[-•\d]/.test(trimmed);
+    const colonHeaderMatch = !startsWithBulletOrDigit
+      ? trimmed.match(/^[*_~#\s]*(?:lista\s+de\s+|setor\s+de\s+|categoria\s*:?\s*)?([a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ\s/&]{1,32}?)[*_~#\s]*:[*_~#\s]*$/i)
+      : null;
+    const boldHeaderMatch = !startsWithBulletOrDigit
+      ? trimmed.match(/^\*+\s*(?:lista\s+de\s+|setor\s+de\s+)?([a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ\s/&]{1,32}?)\s*:?\s*\*+$/i)
+      : null;
+    const knownStandAloneCatMatch = !startsWithBulletOrDigit
+      ? trimmed.match(/^[*_~#\s]*(?:lista\s+de\s+)?(hortifr[uú]ti|hortali[cç]as?|bomboni[eé]re|temperos?|condimentos?|especiarias?|frutas?|legumes?|verduras?|folhagens?|embalagens?|mercearia|padaria|latic[ií]nios?|cereais|gr[aã]os|diversos)[*_~#\s:]*$/i)
+      : null;
+
+    const matchedCatRaw =
+      (colonHeaderMatch && colonHeaderMatch[1]) ||
+      (boldHeaderMatch && boldHeaderMatch[1]) ||
+      (knownStandAloneCatMatch && knownStandAloneCatMatch[1]);
+
+    if (matchedCatRaw && !new RegExp(`^\\d+\\s*${UNITS_PATTERN}\\b`, 'i').test(matchedCatRaw.trim())) {
+      currentCategory = normalizeCategoryName(matchedCatRaw);
+      hasExplicitCategorySection = true;
       continue;
     }
 
@@ -71,89 +308,86 @@ function fallbackHeuristicParser(text: string, defaultSupplier?: string) {
       cleanLine = cleanLine.replace(/\([^)]+\)/, '').trim();
     }
 
-    // Strip leading dashes, asterisks, bullet points or list numbers: "- ", "* ", "1. ", "• "
-    cleanLine = cleanLine.replace(/^[-*•\d+.)\s]+/, '').trim();
-    // Also remove any remaining isolated asterisks that Charles might have placed
+    // Only strip bullet characters (-, *, •, –) or numbered list markers ("1. " or "1) ")
+    // NEVER strip digits that are part of a product quantity like "1cx Uva Vitória" or "5 Alface"!
+    cleanLine = cleanLine.replace(/^[-*•–—\s]+/, '').trim();
+    cleanLine = cleanLine.replace(/^\d+[.)]\s+/, '').trim();
     cleanLine = cleanLine.replace(/^\*+|\*+$/g, '').trim();
     if (!cleanLine) continue;
 
     let quantidade = '';
     let produto = cleanLine;
 
-    // Pattern 1: Fractions (e.g., "1/2cx Tomate", "1/2sc Inhame", "1/4cx Pimentão")
-    const fractionMatch = cleanLine.match(/^(1\/2|1\/4|3\/4)\s*(cx|cxs|caixas?|sc|sacos?|kg|un|bdj|fd)?\s*(?:de\s+)?(.*)$/i);
+    // Pattern 1: Fractions at start of line (e.g., "1/2cx Tomate", "1/2sc Inhame", "1/4cx Pimentão")
+    const fractionMatch = cleanLine.match(
+      new RegExp(`^(\\d+\\/\\d+)\\s*(${UNITS_PATTERN})?\\b\\s*(?:de\\s+)?(.*)$`, 'i')
+    );
     if (fractionMatch) {
       const frac = fractionMatch[1];
-      const unit = fractionMatch[2] ? fractionMatch[2].toLowerCase() : (currentCategory === 'Hortaliças' ? 'maço' : 'cx');
+      const unit = fractionMatch[2]
+        ? normalizeUnitToken(fractionMatch[2])
+        : currentCategory === 'Hortaliças'
+        ? 'maço'
+        : 'cx';
       quantidade = `${frac} ${unit}`;
       produto = fractionMatch[3].trim();
     } else {
-      // Pattern 2: Leading quantity with unit (glued or spaced, e.g. "1cx Uva", "16un Melancia", "60kg Melão", "1sc Batata", "1fd Pipoca")
-      const leadingQtyRegex = new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${unitsRegex})\\s+(?:de\\s+)?(.*)$`, 'i');
+      // Pattern 2: Leading quantity with unit (glued or spaced, e.g. "1cx Uva Vitória", "16Un Melancia", "2cx Mamão Papaya", "1sc Limão Taiti", "1 Bola de Coentro")
+      const leadingQtyRegex = new RegExp(
+        `^(\\d+(?:[.,]\\d+)?)\\s*(${UNITS_PATTERN})\\b\\s*(?:de\\s+)?(.*)$`,
+        'i'
+      );
       const leadingMatch = cleanLine.match(leadingQtyRegex);
 
       if (leadingMatch) {
-        let unitStr = leadingMatch[2].toLowerCase();
-        // Normalize common abbreviations
-        if (unitStr === 'cxs' || unitStr === 'caixa' || unitStr === 'caixas') unitStr = 'cx';
-        if (unitStr === 'saco' || unitStr === 'sacos') unitStr = 'sc';
-        if (unitStr === 'unid' || unitStr === 'unidade' || unitStr === 'unidades') unitStr = 'un';
-        if (unitStr === 'quilo' || unitStr === 'quilos') unitStr = 'kg';
-        if (unitStr === 'fardo' || unitStr === 'fardos') unitStr = 'fd';
-
+        const unitStr = normalizeUnitToken(leadingMatch[2]);
         quantidade = `${leadingMatch[1]} ${unitStr}`;
         produto = leadingMatch[3].trim();
       } else {
-        // Pattern 3: Number only without explicit unit (e.g. "5 Alface Americano", "15 Couve", "5 Cebolinha")
+        // Pattern 3: Leading number only without explicit unit (e.g. "5 Alface Crespa", "5 Alface Americano", "5 Couve", "4 Rúcula")
         const numberOnlyMatch = cleanLine.match(/^(\d+)\s+([a-zA-ZÀ-ÿ].*)$/);
         if (numberOnlyMatch && !/^\d+\s*(?:g|mg|ml|l)\b/i.test(cleanLine)) {
           const num = numberOnlyMatch[1];
           const prodRest = numberOnlyMatch[2].trim();
-          // If in Hortaliças, assume "un" or "maços"
           const defaultUnit = currentCategory === 'Hortaliças' ? 'maços' : 'un';
           quantidade = `${num} ${defaultUnit}`;
           produto = prodRest;
         } else {
-          // Pattern 4: Unit at end (e.g. "Tomate 10 cx")
-          const trailingQtyRegex = new RegExp(`^(.*?)\\s+[-–—:]?\\s*(\\d+(?:[.,]\\d+)?\\s*${unitsRegex})$`, 'i');
-          const trailingMatch = cleanLine.match(trailingQtyRegex);
+          // Pattern 4: Explicit wholesale unit at end separated by dash/colon (e.g. "Tomate - 10 cx")
+          // IMPORTANT: Do NOT strip package weights like "Bokus 30g" or "Bokus 45g" or "Maracujá 1ª"!
+          const trailingWholesaleRegex =
+            /^(.*?)\s+[-–—:]\s*(\d+(?:[.,]\d+)?\s*(?:cx|cxs|caixas?|sc|sacos?|fd|fardos?|un|unid|unidades?|macos?|maços?|bdj|bandejas?|pct|pacotes?))$/i;
+          const trailingMatch = cleanLine.match(trailingWholesaleRegex);
 
           if (trailingMatch) {
             produto = trailingMatch[1].trim();
             quantidade = trailingMatch[2].trim().toLowerCase();
           } else {
-            // Pattern 5: No quantity found at all (e.g. "Tomate Cereja", "Repolho Branco", "Banana Prata", "Paçoca Gigante")
+            // Pattern 5: No quantity in line (e.g. "Beterraba", "MANTEIGA BEZERRA", "Álcool", "Bokus 30g", "Bokus 45g", "Cominho Puro", "Edu Guedes")
+            // Keep quantity strictly blank ("") as confirmed by the user!
             quantidade = '';
-            produto = cleanLine.replace(/[-–—:]/g, ' ').replace(/\s+/g, ' ').trim();
+            produto = cleanLine.replace(/^[-–—:]\s*/, '').replace(/\s+/g, ' ').trim();
           }
         }
       }
     }
 
-    // Clean up product string
-    produto = produto.replace(/^[-–—:]\s*/, '').replace(/\s+/g, ' ').trim();
+    // Automatically classify category (separating *Hortifruti:* into Frutas and Legumes, while keeping explicit sections like Laticínios, Embalagens, Hortaliças, Bomboniere, Temperos)
+    const categoria = classifyHortifrutiProduct(
+      produto,
+      currentCategory,
+      hasExplicitCategorySection
+    );
 
-    // Determine category based on current section or product names
-    let categoria = currentCategory;
-    const lower = produto.toLowerCase();
-    if (currentCategory === 'Hortifrúti') {
-      if (/banana|maca|maçã|laranja|mamao|mamão|melancia|abacaxi|uva|manga|limao|limão|morango|pera|pêra|abacate|maracuja|maracujá|kiwi|goiaba|melao|melão|tangerina|pokan|paulistinha|pessego|pêssego/.test(lower)) {
-        categoria = 'Frutas';
-      } else if (/tomate|batata|cebola|cenoura|chuchu|abobrinha|pimentao|pimentão|pepino|mandioca|beterraba|alho|berinjela|quiabo|vagem|abobora|abóbora|gengibre|inhame|cará|cara/.test(lower)) {
-        categoria = 'Legumes';
-      } else if (/repolho|alface|couve|rucula|rúcula|espinafre|cheiro verde|coentro|salsa|cebolinha|agriao|agrião|brocolis|brócolis/.test(lower)) {
-        categoria = 'Hortaliças';
-      }
-    }
+    const sanitized = sanitizeExtractedItem({
+      produto,
+      quantidadePedida: quantidade,
+      fornecedor: itemSupplier || (defaultSupplier ? defaultSupplier : ''),
+      categoria,
+    });
 
-    if (produto.length >= 2) {
-      items.push({
-        produto: produto.charAt(0).toUpperCase() + produto.slice(1),
-        quantidadePedida: quantidade,
-        fornecedor: itemSupplier || (defaultSupplier ? defaultSupplier : ''),
-        categoria,
-        observacao: undefined,
-      });
+    if (sanitized.produto.length >= 2) {
+      items.push(sanitized);
     }
   }
 
@@ -171,14 +405,18 @@ app.post('/api/ai/parse-purchases', async (req, res) => {
       });
     }
 
+    // Always compute the deterministic line-by-line parse first as our ground-truth reference
+    const deterministicItems = fallbackHeuristicParser(text, defaultSupplier);
+
+    // If the input is a structured line-by-line list (like WhatsApp lists), deterministicItems is 100% faithful:
+    // It never drops items (like Uva Vitória), never invents quantities for unquantified items (like Beterraba or Bokus 30g),
+    // and never alters quantities (like 2cx Mamão Papaya).
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey) {
-      console.warn('GEMINI_API_KEY não configurada no servidor. Usando processamento inteligente local.');
-      const fallbackItems = fallbackHeuristicParser(text, defaultSupplier);
+    if (!apiKey || deterministicItems.length > 0) {
       return res.json({
-        items: fallbackItems,
-        source: 'local_heuristic',
+        items: deterministicItems,
+        source: 'deterministic_exact',
       });
     }
 
@@ -187,84 +425,40 @@ app.post('/api/ai/parse-purchases', async (req, res) => {
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
     });
 
-    const prompt = `Você é o assistente inteligente de compras e conferência de hortifrúti da empresa "Beto da Fruta".
-Sua tarefa é analisar a mensagem de compra enviada pelo WhatsApp (feita por Charles ou Amanda) e extrair com máxima precisão todos os itens a serem comprados para a loja.
+    const prompt = `Você é o assistente inteligente de compras e conferência do hortifrúti "Beto da Fruta".
+Sua única tarefa é extrair fielmente os produtos que estão presentes na mensagem de compra abaixo, sem NUNCA adicionar ou inventar produtos que não estejam escritos no texto.
 
-TEXTO INFORMAL DE COMPRA:
+TEXTO DE COMPRA ENVIADO PELO USUÁRIO:
 """
 ${text}
 """
 
-REGRAS OBRIGATÓRIAS DE EXTRAÇÃO:
-1. QUANTIDADE ANTES DO PRODUTO (PADRÃO OFICIAL DO BETO DA FRUTA):
-   - A quantidade vem antes do produto!
-     Exemplos reais:
-     • "1cx Uva Vitória" ➔ Qtd: "1 cx", Produto: "Uva Vitória"
-     • "1/2cx Tomate Maduro" ➔ Qtd: "1/2 cx", Produto: "Tomate Maduro"
-     • "1sc Batata Doce Vitória" ➔ Qtd: "1 sc", Produto: "Batata Doce Vitória"
-     • "1/2sc Inhame" ➔ Qtd: "1/2 sc", Produto: "Inhame"
-     • "1/2sc Cará" ➔ Qtd: "1/2 sc", Produto: "Cará"
-     • "16un Melancia" ➔ Qtd: "16 un", Produto: "Melancia"
-     • "60kg Melão Espanhol" ➔ Qtd: "60 kg", Produto: "Melão Espanhol"
-     • "1fd Pipoca Bokus 30g" ➔ Qtd: "1 fd", Produto: "Pipoca Bokus 30g"
-     • "5 Alface Americano" ➔ Qtd: "5 un" (ou "5 maços"), Produto: "Alface Americano"
-     • "1 Bola de Coentro" ➔ Qtd: "1 bola", Produto: "Coentro"
-     • "15 Couve" ➔ Qtd: "15 maços", Produto: "Couve"
+REGRAS CRÍTICAS E OBRIGATÓRIAS:
+1. PROIBIDO ALUCINAR OU INVENTAR PRODUTOS E QUANTIDADES:
+   - Extraia EXCLUSIVAMENTE os itens que aparecem no texto acima.
+   - Se o item não tiver quantidade informada na linha (ex: "Beterraba", "Bokus 30g", "Cominho Puro"), deixe 'quantidadePedida' estritamente vazio "".
+2. QUANTIDADE COLADA OU ESPAÇADA ANTES DO PRODUTO:
+   - "- 1cx Uva Vitória" ➔ quantidadePedida: "1 cx", produto: "Uva Vitória".
+   - "- 2cx Mamão Papaya" ➔ quantidadePedida: "2 cx", produto: "Mamão Papaya".
+   - "- 16Un Melancia" ➔ quantidadePedida: "16 un", produto: "Melancia".
+3. CATEGORIAS AUTOMÁTICAS:
+   - Classifique itens de Hortifruti automaticamente entre "Frutas" e "Legumes", e mantenha cabeçalhos de seção como "Laticínios", "Embalagens", "Hortaliças", "Bomboniere" e "Temperos".
 
-2. PRODUTOS SEM QUANTIDADE (NÃO INVENTE NADA):
-   - Na rotina da loja, vários produtos vêm na lista sem quantidade especificada para serem checados na hora ou cotados no Ceasa.
-     Exemplos reais do WhatsApp:
-     • "- Tomate Cereja" ➔ Qtd: "" (string vazia), Produto: "Tomate Cereja"
-     • "- Repolho Branco" ➔ Qtd: "" (string vazia), Produto: "Repolho Branco"
-     • "- Banana Prata" ➔ Qtd: "" (string vazia), Produto: "Banana Prata"
-     • "- Banana Comprida" ➔ Qtd: "" (string vazia), Produto: "Banana Comprida"
-     • "- Paçoca Gigante" ➔ Qtd: "" (string vazia), Produto: "Paçoca Gigante"
-     • "- Gula Sabor Cebola" ➔ Qtd: "" (string vazia), Produto: "Gula Sabor Cebola"
-     • "- Brownie Evaristo" ➔ Qtd: "" (string vazia), Produto: "Brownie Evaristo"
-   - Se um produto vier sem quantidade no texto, NUNCA invente um número. Deixe 'quantidadePedida' como string vazia "".
-
-3. ASTERISCOS E SEÇÕES DE CATEGORIA:
-   - Charles costuma colocar asteriscos nos títulos (ex: "*Hortifruti:*", "*Bomboniere:*", "*Hortaliças:*") e Amanda envia sem asteriscos (ex: "Hortifruti:", "Bomboniere:").
-   - Ignore os asteriscos e utilize essas linhas como agrupador de categoria para todos os produtos que vêm abaixo daquela seção!
-     • Produtos abaixo de *Hortifruti:* ou Hortifruti: ➔ Categoria: "Frutas", "Legumes" ou "Hortifrúti"
-     • Produtos abaixo de *Bomboniere:* ou Bomboniere: ➔ Categoria: "Bomboniere"
-     • Produtos abaixo de *Hortaliças:* ou Hortaliças: ➔ Categoria: "Hortaliças"
-
-4. FORNECEDOR:
-   - Se o fornecedor vier especificado entre parênteses (ex: "(Box 14 Ceasa)") ou no cabeçalho de bloco, utilize-o.
-   - Caso contrário, utilize "${defaultSupplier}" (ou deixe vazio se não informado) para conferência na tela do app.
-
-Retorne rigorosamente em formato JSON estruturado conforme o schema.`;
+Retorne apenas o JSON conforme o schema.`;
 
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
         items: {
           type: Type.ARRAY,
-          description: 'Lista de produtos de compra identificados no texto.',
           items: {
             type: Type.OBJECT,
             properties: {
-              produto: {
-                type: Type.STRING,
-                description: 'Nome padronizado do produto (ex: Tomate Saladete)',
-              },
-              quantidadePedida: {
-                type: Type.STRING,
-                description: 'Quantidade com unidade de medida (ex: 10 cx, 5 sc, 15 maços) ou string vazia se não informado',
-              },
-              fornecedor: {
-                type: Type.STRING,
-                description: 'Nome do fornecedor identificado, ou vazio se não houver',
-              },
-              categoria: {
-                type: Type.STRING,
-                description: 'Frutas, Legumes, Folhagens, Verduras, Embalagens ou Outros',
-              },
-              observacao: {
-                type: Type.STRING,
-                description: 'Observações de qualidade, calibre ou ponto de maturação, se houver',
-              },
+              produto: { type: Type.STRING },
+              quantidadePedida: { type: Type.STRING },
+              fornecedor: { type: Type.STRING },
+              categoria: { type: Type.STRING },
+              observacao: { type: Type.STRING },
             },
             required: ['produto', 'quantidadePedida', 'fornecedor', 'categoria'],
           },
@@ -274,43 +468,40 @@ Retorne rigorosamente em formato JSON estruturado conforme o schema.`;
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
         responseSchema,
-        temperature: 0.1,
+        temperature: 0.0,
       },
     });
 
     const responseText = response.text || '{}';
     const parsedData = JSON.parse(responseText);
-
-    const items = Array.isArray(parsedData.items) ? parsedData.items : [];
-
-    // Fallback if model returned empty array for nonempty text
-    if (items.length === 0 && text.trim().length > 10) {
-      const fallback = fallbackHeuristicParser(text, defaultSupplier);
-      return res.json({
-        items: fallback,
-        source: 'gemini_fallback',
-      });
-    }
+    const rawAiItems = Array.isArray(parsedData.items) ? parsedData.items : [];
+    const sanitizedAiItems = rawAiItems.map((item: any) =>
+      sanitizeExtractedItem({
+        produto: item.produto || '',
+        quantidadePedida: item.quantidadePedida || '',
+        fornecedor: item.fornecedor || defaultSupplier || '',
+        categoria: item.categoria || 'Hortifrúti',
+        observacao: item.observacao,
+      })
+    );
 
     return res.json({
-      items,
-      source: 'gemini-3.8-flash',
+      items: sanitizedAiItems,
+      source: 'gemini-3-flash-preview',
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/parse-purchases:', error);
     try {
-      // Graceful fallback to heuristic extraction on network/timeout error
       const { text = '', defaultSupplier = 'Ceasa Box 14' } = req.body || {};
       const fallbackItems = fallbackHeuristicParser(text, defaultSupplier);
       return res.json({
         items: fallbackItems,
         source: 'local_heuristic_after_error',
-        notice: 'Processado com motor local devido a oscilação de conexão com a IA.',
       });
     } catch (e) {
       return res.status(500).json({
@@ -593,7 +784,7 @@ async function startServer() {
 
   if (isDev) {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false, ws: false },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

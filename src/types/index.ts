@@ -59,6 +59,8 @@ export type PurchaseStatusConferencia =
   | 'Entregue Completo'
   | 'Entrega Parcial / Falta'
   | 'Recebido a Mais'
+  | 'Comprou, mas não chegou'
+  | 'Não Comprou'
   | 'Pendente';
 
 export interface PurchaseItem {
@@ -76,11 +78,16 @@ export interface PurchaseItem {
   enviadoWhatsapp?: boolean;
   dataEnvioWhatsapp?: string;
 
-  // Conferência de Recebimento na Loja (Lucas ou Rafael)
+  // Conferência de Recebimento na Loja (Lucas, Rafael ou Admin em conferência conjunta)
   mercadoriaRecebida: boolean; // Sim/Não
-  quantidadeRecebida?: string; // Ex: "10 cx", "8 cx"
+  quantidadeRecebida?: string; // Ex: "1 cx", "8 cx"
+  unidadeConversao?: 'kg' | 'un'; // Obrigatório na conferência: 'kg' (aceita fração ex: 20,450) ou 'un' (apenas inteiro ex: 243)
+  quantidadeConvertida?: string; // Valor convertido na chegada (Ex: "20,450" para kg ou "243" para un)
+  quantidadeAvaria?: string; // Opcional, na mesma unidade de medida da conversão ('kg' fracionado ou 'un' inteiro)
+  quantidadeLiquidaAproveitavel?: string; // Saldo líquido (quantidadeConvertida - quantidadeAvaria)
   statusConferencia?: PurchaseStatusConferencia;
-  conferidoPorNome?: string; // "Lucas" ou "Rafael"
+  motivoNaoChegou?: 'Comprou, mas não chegou' | 'Não Comprou';
+  conferidoPorNome?: string; // "Lucas", "Rafael", "Charles + Lucas", etc.
   conferidoPorId?: string;
   dataConferencia?: string;
   motivoDivergencia?: string; // Ex: "Fornecedor mandou 2 a menos"

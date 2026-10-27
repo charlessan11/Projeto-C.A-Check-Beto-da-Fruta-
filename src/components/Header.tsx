@@ -22,6 +22,8 @@ import {
   Unlink,
   Database,
   Bell,
+  LayoutGrid,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { User, StoreSettings } from '../types';
 import { AndroidInstallButton } from './AndroidInstallButton';
@@ -45,6 +47,8 @@ interface HeaderProps {
   onOpenBackupModal?: () => void;
   settings: StoreSettings;
   onResetData: () => void;
+  viewMode: 'basico' | 'completo';
+  onToggleViewMode: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -65,6 +69,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBackupModal,
   settings,
   onResetData,
+  viewMode,
+  onToggleViewMode,
 }) => {
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const isAdmin = currentUser.perfil === 'Administrador';
@@ -133,13 +139,43 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
-                  Encarregado: <strong className="text-slate-700">{settings.gerenteResponsavel}</strong> • Metodologia Chão de Loja
+                  Encarregado do Hortifrúti: <strong className="text-slate-700">{settings.gerenteResponsavel}</strong> • Proprietários: <strong className="text-slate-700">{settings.proprietario}</strong>
                 </p>
               </div>
             </div>
 
             {/* Desktop Action Controls */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Switcher: Modo Básico vs Modo Completo */}
+              <button
+                type="button"
+                onClick={onToggleViewMode}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs border ${
+                  viewMode === 'basico'
+                    ? 'bg-[#0a3821] hover:bg-emerald-900 text-white border-[#0a3821]'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-[#0a3821] border-emerald-300'
+                }`}
+                title="Alternar entre Modo Básico (botões grandes e simplificados) e Modo Completo (todas as opções)"
+              >
+                {viewMode === 'basico' ? (
+                  <>
+                    <LayoutGrid className="w-4 h-4 text-emerald-300" />
+                    <span>Modo Básico</span>
+                    <span className="bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      Ir p/ Completo
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <SlidersHorizontal className="w-4 h-4 text-[#0a3821]" />
+                    <span>Modo Completo</span>
+                    <span className="bg-[#0a3821] text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      Ir p/ Básico
+                    </span>
+                  </>
+                )}
+              </button>
+
               {/* Install on Android */}
               <AndroidInstallButton variant="header" />
 
@@ -456,6 +492,30 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right: Quick Touch Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mobile Toggle: Básico vs Completo */}
+            <button
+              type="button"
+              onClick={onToggleViewMode}
+              className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer shadow-xs border transition-all ${
+                viewMode === 'basico'
+                  ? 'bg-emerald-400 text-emerald-950 border-emerald-300'
+                  : 'bg-white/15 text-white border-white/25'
+              }`}
+              title="Alternar entre Modo Básico e Modo Completo"
+            >
+              {viewMode === 'basico' ? (
+                <>
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Básico</span>
+                </>
+              ) : (
+                <>
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Completo</span>
+                </>
+              )}
+            </button>
+
             <AndroidInstallButton variant="header" />
 
             <button

@@ -45,6 +45,7 @@ import { DailyRoutinesTab } from './components/DailyRoutinesTab';
 import { ChangeAdminPinModal } from './components/ChangeAdminPinModal';
 import { SystemManualModal } from './components/SystemManualModal';
 import { DailyBackupModal } from './components/DailyBackupModal';
+import { BasicOperationalView } from './components/BasicOperationalView';
 import {
   generateDailyBackupPayload,
   saveDailyBackupToLocalStorage,
@@ -67,6 +68,9 @@ export default function App() {
 
   // Navigation tab (defaults to rotinas for daily operational focus)
   const [activeTab, setActiveTab] = useState<'rotinas' | 'tasks' | 'purchases' | 'audit' | 'stats'>('rotinas');
+
+  // Layout mode: 'basico' (default for Operacional) vs 'completo' (default for Administrador)
+  const [viewMode, setViewMode] = useState<'basico' | 'completo'>('completo');
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -190,6 +194,17 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [currentUser?.id, settings.checkinAtivo]);
+
+  // Automatically set default viewMode whenever user logs in or switches profile:
+  // Operacional -> starts in 'basico' | Administrador -> starts in 'completo'
+  useEffect(() => {
+    if (!currentUser) return;
+    if (currentUser.perfil === 'Operacional') {
+      setViewMode('basico');
+    } else {
+      setViewMode('completo');
+    }
+  }, [currentUser?.id, currentUser?.perfil]);
 
   // Enforce access control: only Administradores can view 'audit' and 'stats'
   useEffect(() => {
@@ -518,12 +533,19 @@ export default function App() {
     }
   };
 
-  const handleBatchAddPurchases = (newItems: PurchaseItem[]) => {
-    const updated = [...newItems, ...purchases];
+  const handleBatchAddPurchases = (
+    newItems: PurchaseItem[],
+    saveMode: 'replace' | 'append' = 'replace'
+  ) => {
+    const updated = saveMode === 'replace' ? newItems : [...newItems, ...purchases];
     handleSavePurchases(updated);
     showToast(
-      `✨ ${newItems.length} produtos importados com IA!`,
-      'Itens inseridos com sucesso na Lista de Compras e prontos para conferência.'
+      saveMode === 'replace'
+        ? `✨ Lista do dia atualizada com ${newItems.length} produtos!`
+        : `✨ ${newItems.length} produtos somados à Lista de Compras!`,
+      saveMode === 'replace'
+        ? 'A lista anterior foi substituída pelos novos produtos importados.'
+        : 'Os novos itens foram adicionados junto aos produtos existentes.'
     );
   };
 
@@ -726,7 +748,12 @@ export default function App() {
         }}
         onUnbindCurrentDevice={handleUnbindCurrentDevice}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          if (tab === 'audit' || tab === 'stats') {
+            setViewMode('completo');
+          }
+        }}
         pendingTasksCount={pendingTasksCount}
         twoMinTasksCount={twoMinTasksCount}
         purchasesAlertCount={purchasesAlertCount}
@@ -738,99 +765,156 @@ export default function App() {
         onOpenBackupModal={() => setIsBackupModalOpen(true)}
         settings={settings}
         onResetData={handleResetData}
+        viewMode={viewMode}
+        onToggleViewMode={() => {
+          const nextMode = viewMode === 'basico' ? 'completo' : 'basico';
+          setViewMode(nextMode);
+          if (nextMode === 'basico' && (activeTab === 'audit' || activeTab === 'stats')) {
+            setActiveTab('rotinas');
+          }
+          showToast(
+            nextMode === 'basico' ? 'Modo Básico Ativado' : 'Modo Completo Ativado',
+            nextMode === 'basico'
+              ? 'Visualização limpa com botões grandes para operação rápida.'
+              : 'Visualização avançada com todos os filtros e relatórios.'
+          );
+        }}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 sm:py-6">
-        {/* Aba 1: Rotinas Diárias Obrigatórias (Beto da Fruta) */}
-        {activeTab === 'rotinas' && (
-          <DailyRoutinesTab
+        {viewMode === 'basico' ? (
+          <BasicOperationalView
+            currentUser={currentUser}
+            users={users}
             routine={routine}
             onUpdateRoutine={handleUpdateRoutine}
-            users={users}
-            currentUser={currentUser}
-            onOpenPrintModal={() => setIsPrintModalOpen(true)}
-            onNavigateToPurchases={() => setActiveTab('purchases')}
-            onSyncWithTasks={handleSyncRoutineWithTasks}
-          />
-        )}
-
-        {/* Aba 2: Quadro Geral de Tarefas */}
-        {activeTab === 'tasks' && (
-          <TaskList
             tasks={tasks}
-            users={users}
-            currentUser={currentUser}
+            onQuickCompleteTask={(taskId, obs) => handleConfirmQuickCheck(taskId, obs || '')}
+            onReopenTask={handleReopenTask}
             onAddTask={() => {
               setTaskToEdit(null);
               setIsTaskModalOpen(true);
             }}
-            onEditTask={(task) => {
-              setTaskToEdit(task);
-              setIsTaskModalOpen(true);
-            }}
-            onDeleteTask={handleDeleteTask}
-            onQuickComplete={handleOpenQuickCheck}
-            onStartTask={handleStartTask}
-            onReopenTask={handleReopenTask}
-            onOpenPrintModal={() => setIsPrintModalOpen(true)}
-            onStartPomodoro={handleStartPomodoro}
-            focusTwoMinute={focusTwoMinuteQueue}
-            setFocusTwoMinute={setFocusTwoMinuteQueue}
-          />
-        )}
-
-        {/* Aba 3: Compras & Reposição */}
-        {activeTab === 'purchases' && (
-          <PurchaseList
             purchases={purchases}
-            currentUser={currentUser}
-            settings={settings}
+            onUpdatePurchase={(item) => {
+              const updated = purchases.map((p) => (p.id === item.id ? item : p));
+              handleSavePurchases(updated);
+              if (item.mercadoriaRecebida || item.reposicaoConcluida) {
+                playTaskCompletionSound(settings);
+              }
+            }}
+            onSavePurchases={(items) => {
+              handleSavePurchases(items);
+              playTaskCompletionSound(settings);
+              showToast('Conferência atualizada!', 'Todos os itens marcados como recebidos na loja.');
+            }}
+            onBatchAddPurchases={handleBatchAddPurchases}
             onAddPurchase={() => {
               setPurchaseToEdit(null);
               setIsPurchaseModalOpen(true);
             }}
-            onEditPurchase={(item) => {
-              setPurchaseToEdit(item);
-              setIsPurchaseModalOpen(true);
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onSwitchToCompleteMode={() => {
+              setViewMode('completo');
+              showToast('Modo Completo Ativado', 'Todas as ferramentas avançadas estão visíveis.');
             }}
-            onDeletePurchase={handleDeletePurchase}
-            onToggleRecebida={handleToggleRecebida}
-            onToggleReposicao={handleToggleReposicao}
-            onSavePurchases={handleSavePurchases}
-            onBatchAddPurchases={handleBatchAddPurchases}
-            onUpdatePurchase={(item) => {
-              const updated = purchases.map((p) => (p.id === item.id ? item : p));
-              handleSavePurchases(updated);
-            }}
-          />
-        )}
-
-        {/* Aba 4: Auditoria & Baixas - Somente Administradores */}
-        {activeTab === 'audit' && currentUser.perfil === 'Administrador' && (
-          <AuditLogView
-            tasks={tasks}
-            users={users}
-            onOpenBackupModal={() => setIsBackupModalOpen(true)}
-          />
-        )}
-
-        {/* Aba 5: Estatísticas & Tempos - Somente Administradores */}
-        {activeTab === 'stats' && currentUser.perfil === 'Administrador' && (
-          <StatsDashboard
-            tasks={tasks}
-            users={users}
-            currentUser={currentUser}
             settings={settings}
-            routine={routine}
           />
+        ) : (
+          <>
+            {/* Aba 1: Rotinas Diárias Obrigatórias (Beto da Fruta) */}
+            {activeTab === 'rotinas' && (
+              <DailyRoutinesTab
+                routine={routine}
+                onUpdateRoutine={handleUpdateRoutine}
+                users={users}
+                currentUser={currentUser}
+                onOpenPrintModal={() => setIsPrintModalOpen(true)}
+                onNavigateToPurchases={() => setActiveTab('purchases')}
+                onSyncWithTasks={handleSyncRoutineWithTasks}
+              />
+            )}
+
+            {/* Aba 2: Quadro Geral de Tarefas */}
+            {activeTab === 'tasks' && (
+              <TaskList
+                tasks={tasks}
+                users={users}
+                currentUser={currentUser}
+                onAddTask={() => {
+                  setTaskToEdit(null);
+                  setIsTaskModalOpen(true);
+                }}
+                onEditTask={(task) => {
+                  setTaskToEdit(task);
+                  setIsTaskModalOpen(true);
+                }}
+                onDeleteTask={handleDeleteTask}
+                onQuickComplete={handleOpenQuickCheck}
+                onStartTask={handleStartTask}
+                onReopenTask={handleReopenTask}
+                onOpenPrintModal={() => setIsPrintModalOpen(true)}
+                onStartPomodoro={handleStartPomodoro}
+                focusTwoMinute={focusTwoMinuteQueue}
+                setFocusTwoMinute={setFocusTwoMinuteQueue}
+              />
+            )}
+
+            {/* Aba 3: Compras & Reposição */}
+            {activeTab === 'purchases' && (
+              <PurchaseList
+                purchases={purchases}
+                currentUser={currentUser}
+                settings={settings}
+                onAddPurchase={() => {
+                  setPurchaseToEdit(null);
+                  setIsPurchaseModalOpen(true);
+                }}
+                onEditPurchase={(item) => {
+                  setPurchaseToEdit(item);
+                  setIsPurchaseModalOpen(true);
+                }}
+                onDeletePurchase={handleDeletePurchase}
+                onToggleRecebida={handleToggleRecebida}
+                onToggleReposicao={handleToggleReposicao}
+                onSavePurchases={handleSavePurchases}
+                onBatchAddPurchases={handleBatchAddPurchases}
+                onUpdatePurchase={(item) => {
+                  const updated = purchases.map((p) => (p.id === item.id ? item : p));
+                  handleSavePurchases(updated);
+                }}
+              />
+            )}
+
+            {/* Aba 4: Auditoria & Baixas - Somente Administradores */}
+            {activeTab === 'audit' && currentUser.perfil === 'Administrador' && (
+              <AuditLogView
+                tasks={tasks}
+                users={users}
+                onOpenBackupModal={() => setIsBackupModalOpen(true)}
+              />
+            )}
+
+            {/* Aba 5: Estatísticas & Tempos - Somente Administradores */}
+            {activeTab === 'stats' && currentUser.perfil === 'Administrador' && (
+              <StatsDashboard
+                tasks={tasks}
+                users={users}
+                currentUser={currentUser}
+                settings={settings}
+                routine={routine}
+              />
+            )}
+          </>
         )}
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-4 sm:px-6 text-center text-xs text-slate-500 no-print">
         <p>
-          <strong>{settings.nomeLoja}</strong> • Encarregado: {settings.gerenteResponsavel} • Proprietário: {settings.proprietario} • Metodologia SMART, Pomodoro &amp; Regra dos 2 Minutos (GTD)
+          <strong>{settings.nomeLoja}</strong> • Encarregado do Hortifrúti: {settings.gerenteResponsavel} • Proprietários: {settings.proprietario} • Metodologia SMART, Pomodoro &amp; Regra dos 2 Minutos (GTD)
         </p>
       </footer>
 

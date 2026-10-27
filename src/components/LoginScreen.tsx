@@ -94,12 +94,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
 
           <div className="space-y-6">
-            {/* Bloco 1: Gestão e Encarregados (Administrador) */}
+            {/* Bloco 1: Proprietários e Encarregado do Hortifrúti (Administrador) */}
             <div>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                  Gestão &amp; Encarregados (Charles, Amanda e Beto — Acesso Total)
+                  Proprietários (Beto &amp; Amanda) &amp; Encarregado do Hortifrúti (Charles) — Acesso Total
                 </h3>
               </div>
 
@@ -141,8 +141,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           </div>
                         </div>
 
-                        <div className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
-                          {user.nome}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
+                            {user.nome}
+                          </span>
+                          {user.cargoDescricao && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              {user.cargoDescricao}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-400 mt-0.5 font-medium line-clamp-2">
                           {user.setoresAtuacao}
@@ -238,7 +245,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       {/* Footer Info */}
       <div className="max-w-5xl mx-auto w-full text-center text-xs text-slate-400 pb-2">
         <p>
-          <strong>{storeName}</strong> • Responsável: Charles Araújo • Proprietário: Beto
+          <strong>{storeName}</strong> • Encarregado do Hortifrúti: Charles Araújo • Proprietários: Beto &amp; Amanda
         </p>
         <p className="text-[11px] text-slate-500 mt-1">
           Metodologia SMART • Regra dos 2 Minutos (GTD) • Técnica Pomodoro • Espelhamento Físico em Prancheta

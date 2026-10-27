@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { X, Printer, CheckSquare, Sparkles, Copy, Check, Download, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Printer, Copy, Check } from 'lucide-react';
 import { Task, User, StoreSettings, Prioridade, DailyRoutine } from '../types';
 import { getTodayDateString } from '../services/storage';
 
@@ -24,6 +25,17 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
   const [turno, setTurno] = useState<'Manhã' | 'Tarde' | 'Noite' | 'Integral'>('Manhã');
   const [apenasPendentes, setApenasPendentes] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('has-print-modal');
+    } else {
+      document.body.classList.remove('has-print-modal');
+    }
+    return () => {
+      document.body.classList.remove('has-print-modal');
+    };
+  }, [isOpen]);
 
   const usersMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -116,9 +128,9 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-300">
+  const modalContent = (
+    <div className="print-portal-root fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+      <div className="print-modal-dialog bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-300">
         {/* Modal Topbar (hidden during print) */}
         <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50 rounded-t-2xl no-print">
           <div>
@@ -129,7 +141,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-500">
-              Formato padronizado A4 de alta densidade para colaboradores com mãos úmidas ou na banca.
+              Formato padronizado A4 multi-página para colaboradores no chão de loja e nas bancas.
             </p>
           </div>
 
@@ -203,9 +215,9 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
         </div>
 
         {/* Printable Paper Preview (What will print on paper) */}
-        <div className="overflow-y-auto flex-1 p-4 sm:p-8 bg-slate-100">
+        <div className="print-modal-scroll-area overflow-y-auto flex-1 p-4 sm:p-8 bg-slate-100">
           <div className="max-w-[800px] mx-auto bg-white border border-slate-300 shadow-lg p-6 sm:p-8 font-sans print-page-container">
-            {/* Header section (Section 4.1) */}
+            {/* Header section */}
             <div className="border-b-2 border-slate-900 pb-3 mb-4">
               <div className="flex items-start justify-between">
                 <div>
@@ -234,7 +246,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
 
             {/* Bloco 0 - Rotinas Diárias Obrigatórias (Escala Fixa do Hortifrúti) */}
             {routine && (
-              <div className="mb-5 p-3 rounded-lg border border-emerald-500 bg-emerald-50/30 print-avoid-break">
+              <div className="mb-4 p-3 rounded-lg border border-emerald-500 bg-emerald-50/30 print-avoid-break">
                 <div className="flex items-center justify-between mb-2 pb-1 border-b border-emerald-300">
                   <h2 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
                     📋 ESCALA DE ROTINAS DIÁRIAS OBRIGATÓRIAS (BETO DA FRUTA)
@@ -244,9 +256,9 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   {/* Coluna 1: Reposição e Balcão */}
-                  <div className="space-y-1.5 border-r md:border-slate-300 pr-2">
+                  <div className="space-y-1.5 sm:border-r sm:border-slate-300 sm:pr-2">
                     <div className="font-bold text-slate-900 border-b border-slate-200 pb-0.5 text-[11px] uppercase">
                       1. Reposição do Hortifrúti (Contador assume Exp C + Bianca)
                     </div>
@@ -294,7 +306,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                     <div className="flex items-start gap-1.5 leading-tight">
                       <span className="inline-block w-3.5 h-3.5 border border-slate-700 rounded-xs mt-0.5 shrink-0 bg-white" />
                       <span>
-                        <strong>Água de Coco:</strong> {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome} (Responsável único: Lucas ou Rafael • Meta: {routine.aguaDeCoco.metaMinLitros}–{routine.aguaDeCoco.metaMaxLitros}L + Corte polpa + Descarte lixo)
+                        <strong>Água de Coco:</strong> {routine.aguaDeCoco.responsavelNome || routine.aguaDeCoco.responsavelPrincipalNome} (Meta: {routine.aguaDeCoco.metaMinLitros}–{routine.aguaDeCoco.metaMaxLitros}L + Corte polpa)
                       </span>
                     </div>
                     <div className="flex items-start gap-1.5 leading-tight">
@@ -309,7 +321,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
             )}
 
             {/* Bloco 1 - Micro-Ações Rápidas (2 Minutos GTD) */}
-            <div className="mb-5 p-3 rounded-lg border border-amber-400 bg-amber-50/40 print-avoid-break">
+            <div className="mb-4 p-3 rounded-lg border border-amber-400 bg-amber-50/40 print-avoid-break">
               <div className="flex items-center justify-between mb-2 pb-1 border-b border-amber-300">
                 <h2 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
                   <span>⚡ BLOCO 1: MICRO-AÇÕES RÁPIDAS (REGRA DOS 2 MINUTOS - GTD)</span>
@@ -344,8 +356,8 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
               )}
             </div>
 
-            {/* Bloco 2 - Atividades Prioritárias por Setor */}
-            <div className="space-y-4 mb-5">
+            {/* Bloco 2 - Atividades Prioritárias por Setor (Multi-Page Safe) */}
+            <div className="space-y-4 mb-4">
               <div className="border-b border-slate-900 pb-1">
                 <h2 className="text-xs font-black text-slate-900 uppercase tracking-wider">
                   BLOCO 2: ATIVIDADES PRIORITÁRIAS POR SETOR (ORDEM CRÍTICA &gt; BAIXA)
@@ -358,9 +370,9 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                 </div>
               ) : (
                 Object.entries(sectorGroups).map(([categoria, items]) => (
-                  <div key={categoria} className="print-avoid-break">
+                  <div key={categoria} className="mb-3">
                     <div className="bg-slate-100 px-2 py-1 border border-slate-400 font-bold text-xs text-slate-900 uppercase">
-                      SETOR: {categoria}
+                      SETOR: {categoria} ({items.length})
                     </div>
 
                     <table className="w-full text-left text-xs border border-slate-400 border-t-0">
@@ -381,7 +393,7 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                               <td className="text-center p-1.5 border-r border-slate-400 align-top">
                                 <span className="inline-block w-4 h-4 border-2 border-slate-800 rounded-xs bg-white" />
                               </td>
-                              <td className="p-1.5 border-r border-slate-400 font-bold text-[10px] align-top text-slate-900">
+                              <td className="p-1.5 border-r border-slate-400 font-bold text-[10px] align-top text-slate-900 whitespace-nowrap">
                                 {priorityTag(task.prioridade)}
                               </td>
                               <td className="p-1.5 border-r border-slate-400 align-top">
@@ -394,11 +406,11 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
                                   </div>
                                 )}
                               </td>
-                              <td className="p-1.5 border-r border-slate-400 text-slate-800 align-top text-xs">
+                              <td className="p-1.5 border-r border-slate-400 text-slate-800 align-top text-xs whitespace-nowrap">
                                 {resp}
                               </td>
-                              <td className="p-1.5 text-center align-bottom border-b border-dashed border-slate-400">
-                                <span className="text-[10px] text-slate-300">___:___ | ______</span>
+                              <td className="p-1.5 text-center align-bottom border-b border-dashed border-slate-400 whitespace-nowrap">
+                                <span className="text-[10px] text-slate-400">___:___ | ______</span>
                               </td>
                             </tr>
                           );
@@ -453,4 +465,6 @@ export const PrintSheetModal: React.FC<PrintSheetModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

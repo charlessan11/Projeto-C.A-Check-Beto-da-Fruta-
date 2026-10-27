@@ -53,10 +53,15 @@ export default defineConfig(() => {
         name: 'disable-vite-hmr-ws',
         transform(code, id) {
           if (id.includes('vite/dist/client/client.mjs')) {
-            return code.replace(
-              /transport\.connect\(createHMRHandler\(handleMessage\)\);/g,
-              '/* HMR WebSocket disabled in preview */'
-            );
+            return code
+              .replace(
+                'let isConnected = !invokeableTransport.connect;',
+                'let isConnected = true;'
+              )
+              .replace(
+                'const createWebSocketModuleRunnerTransport = (options) => {',
+                'const createWebSocketModuleRunnerTransport = (options) => { return { async connect() {}, disconnect() {}, send() {} };'
+              );
           }
           return null;
         },
@@ -69,7 +74,6 @@ export default defineConfig(() => {
     },
     server: {
       hmr: false,
-      ws: false,
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

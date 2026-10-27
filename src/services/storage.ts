@@ -13,8 +13,8 @@ export const INITIAL_USERS: User[] = [
     id: 'USR-01',
     nome: 'Charles',
     perfil: 'Administrador',
-    setoresAtuacao: 'Encarregado de Reposição, Atendimento, Caixa',
-    cargoDescricao: 'Encarregado Geral',
+    setoresAtuacao: 'Encarregado do Hortifrúti, Reposição, Atendimento, Caixa',
+    cargoDescricao: 'Encarregado do Hortifrúti',
     avatarCor: 'bg-emerald-700 text-white',
     pinCode: '1234',
     dispositivosVinculados: [],
@@ -23,8 +23,8 @@ export const INITIAL_USERS: User[] = [
     id: 'USR-02',
     nome: 'Amanda',
     perfil: 'Administrador',
-    setoresAtuacao: 'Gestão de Reposição, Auxílio em Produção',
-    cargoDescricao: 'Gestão de Reposição',
+    setoresAtuacao: 'Proprietária, Gestão de Compras & Reposição, Auxílio em Produção',
+    cargoDescricao: 'Proprietária',
     avatarCor: 'bg-teal-700 text-white',
     pinCode: '1234',
     dispositivosVinculados: [],
@@ -104,7 +104,7 @@ export const INITIAL_USERS: User[] = [
 export const INITIAL_SETTINGS: StoreSettings = {
   nomeLoja: 'Beto da Fruta',
   gerenteResponsavel: 'Charles',
-  proprietario: 'Beto',
+  proprietario: 'Beto & Amanda',
   horarioCheckinMatinal: '08:00',
   checkinAtivo: true,
   mensagemBoasVindas: 'Excelente turno de trabalho no Beto da Fruta! Mantenha o padrão de frescor e alinhamento visual da loja.',
@@ -365,6 +365,18 @@ export const INITIAL_PURCHASES: PurchaseItem[] = [
   },
 ];
 
+export interface ArchivedPurchaseBatch {
+  id: string;
+  dataLista: string;
+  dataArquivamento: string;
+  conferidoPor: string;
+  totalItens: number;
+  itens: PurchaseItem[];
+}
+
+const PURCHASES_HISTORY_KEY = 'betodafruta_purchases_history_v2';
+const PURCHASES_LAST_RENEWAL_DATE_KEY = 'betodafruta_purchases_last_renewal_date_v2';
+
 export const loadUsers = (): User[] => {
   try {
     const raw = localStorage.getItem(USERS_KEY);
@@ -378,7 +390,7 @@ export const loadUsers = (): User[] => {
       localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
       return INITIAL_USERS;
     }
-    // Ensure every user (Admin and Operacional) has their individual pinCode and dispositivosVinculados initialized
+    // Ensure every user has their individual pinCode, dispositivosVinculados, and updated roles for Charles & Amanda
     let updated = false;
     const usersWithPin = parsed.map((u) => {
       const defaultUser = INITIAL_USERS.find((init) => init.id === u.id || init.nome === u.nome);
@@ -386,11 +398,30 @@ export const loadUsers = (): User[] => {
       const effectivePin =
         storedIndividualPin || u.pinCode || defaultUser?.pinCode || '1234';
       const nextDevices = Array.isArray(u.dispositivosVinculados) ? u.dispositivosVinculados : [];
+
+      let nextCargo = u.cargoDescricao;
+      let nextSetores = u.setoresAtuacao;
+      if (u.id === 'USR-01' || u.nome === 'Charles') {
+        if (nextCargo !== 'Encarregado do Hortifrúti') {
+          nextCargo = 'Encarregado do Hortifrúti';
+          nextSetores = 'Encarregado do Hortifrúti, Reposição, Atendimento, Caixa';
+          updated = true;
+        }
+      } else if (u.id === 'USR-02' || u.nome === 'Amanda') {
+        if (nextCargo !== 'Proprietária') {
+          nextCargo = 'Proprietária';
+          nextSetores = 'Proprietária, Gestão de Compras & Reposição, Auxílio em Produção';
+          updated = true;
+        }
+      }
+
       if (u.pinCode !== effectivePin || !Array.isArray(u.dispositivosVinculados)) {
         updated = true;
       }
       return {
         ...u,
+        cargoDescricao: nextCargo,
+        setoresAtuacao: nextSetores,
         pinCode: effectivePin,
         dispositivosVinculados: nextDevices,
       };
@@ -505,44 +536,120 @@ export const saveTasks = (tasks: Task[]): void => {
   localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
 };
 
+export const loadPurchaseHistory = (): ArchivedPurchaseBatch[] => {
+  try {
+    const raw = localStorage.getItem(PURCHASES_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const savePurchaseHistory = (history: ArchivedPurchaseBatch[]): void => {
+  localStorage.setItem(PURCHASES_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+};
+
+/**
+ * Archives items already conferred by Lucas or Rafael into history and returns the renewed list
+ */
+export const archiveConferredPurchases = (
+  currentPurchases: PurchaseItem[],
+  mode: 'only_conferred' | 'all' = 'only_conferred'
+): { remaining: PurchaseItem[]; archivedCount: number } => {
+  const toArchive =
+    mode === 'all'
+      ? currentPurchases
+      : currentPurchases.filter((p) => p.mercadoriaRecebida || Boolean(p.conferidoPorNome));
+  const remaining =
+    mode === 'all'
+      ? []
+      : currentPurchases.filter((p) => !p.mercadoriaRecebida && !p.conferidoPorNome);
+
+  if (toArchive.length > 0) {
+    const checkers = Array.from(
+      new Set(toArchive.map((p) => p.conferidoPorNome).filter(Boolean))
+    );
+    const conferidoPor = checkers.length > 0 ? checkers.join(' & ') : 'Lucas / Rafael';
+    const batch: ArchivedPurchaseBatch = {
+      id: `HIST-${Date.now()}`,
+      dataLista: toArchive[0]?.data || getTodayDateString(),
+      dataArquivamento: new Date().toISOString(),
+      conferidoPor,
+      totalItens: toArchive.length,
+      itens: toArchive,
+    };
+    const existingHistory = loadPurchaseHistory();
+    savePurchaseHistory([batch, ...existingHistory]);
+  }
+
+  savePurchases(remaining);
+  localStorage.setItem(PURCHASES_LAST_RENEWAL_DATE_KEY, getTodayDateString());
+  return { remaining, archivedCount: toArchive.length };
+};
+
 export const loadPurchases = (): PurchaseItem[] => {
   try {
     const raw = localStorage.getItem(PURCHASES_KEY);
-    if (!raw) {
+    if (raw === null) {
       localStorage.setItem(PURCHASES_KEY, JSON.stringify(INITIAL_PURCHASES));
+      localStorage.setItem(PURCHASES_LAST_RENEWAL_DATE_KEY, getTodayDateString());
       return INITIAL_PURCHASES;
     }
     const parsed: PurchaseItem[] = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (!Array.isArray(parsed)) {
       localStorage.setItem(PURCHASES_KEY, JSON.stringify(INITIAL_PURCHASES));
       return INITIAL_PURCHASES;
     }
 
-    // Upgrade items that miss new fields (quantidadePedida, fornecedor)
-    const hasMissingFields = parsed.some((p) => !p.quantidadePedida || !p.fornecedor);
-    if (hasMissingFields) {
-      const upgraded = parsed.map((item, idx) => {
-        const fallback = INITIAL_PURCHASES[idx % INITIAL_PURCHASES.length] || INITIAL_PURCHASES[0];
-        return {
-          ...item,
-          quantidadePedida: item.quantidadePedida || fallback.quantidadePedida || '10 cx',
-          fornecedor: item.fornecedor || fallback.fornecedor || 'Ceasa Box 14',
-          categoria: item.categoria || fallback.categoria || 'Frutas',
-          statusConferencia:
-            item.statusConferencia || (item.mercadoriaRecebida ? 'Entregue Completo' : 'Pendente'),
-          quantidadeRecebida:
-            item.quantidadeRecebida ||
-            (item.mercadoriaRecebida ? item.quantidadePedida || fallback.quantidadePedida || '10 cx' : undefined),
-          conferidoPorNome:
-            item.conferidoPorNome || (item.mercadoriaRecebida ? (idx % 2 === 0 ? 'Lucas' : 'Rafael') : undefined),
-          conferidoPorId:
-            item.conferidoPorId || (item.mercadoriaRecebida ? (idx % 2 === 0 ? 'USR-04' : 'USR-05') : undefined),
-        };
-      });
-      localStorage.setItem(PURCHASES_KEY, JSON.stringify(upgraded));
-      return upgraded;
+    // If user intentionally emptied or renewed the list, keep it empty!
+    if (parsed.length === 0) {
+      return [];
     }
-    return parsed;
+
+    // Daily Automatic Renewal Check:
+    // Whenever a new day starts, any item from a previous day (item.data < today)
+    // that was ALREADY conferred by Lucas or Rafael (mercadoriaRecebida === true)
+    // is automatically archived into history so the new day's list is renewed cleanly!
+    const today = getTodayDateString();
+    const oldConferredItems = parsed.filter(
+      (item) => item.data && item.data < today && (item.mercadoriaRecebida || Boolean(item.conferidoPorNome))
+    );
+
+    let activeItems = parsed;
+    if (oldConferredItems.length > 0) {
+      const checkers = Array.from(
+        new Set(oldConferredItems.map((p) => p.conferidoPorNome).filter(Boolean))
+      );
+      const batch: ArchivedPurchaseBatch = {
+        id: `HIST-AUTO-${Date.now()}`,
+        dataLista: oldConferredItems[0]?.data || today,
+        dataArquivamento: new Date().toISOString(),
+        conferidoPor: checkers.length > 0 ? checkers.join(' & ') : 'Lucas / Rafael',
+        totalItens: oldConferredItems.length,
+        itens: oldConferredItems,
+      };
+      const existingHistory = loadPurchaseHistory();
+      savePurchaseHistory([batch, ...existingHistory]);
+
+      activeItems = parsed.filter(
+        (item) => !(item.data && item.data < today && (item.mercadoriaRecebida || Boolean(item.conferidoPorNome)))
+      );
+      localStorage.setItem(PURCHASES_KEY, JSON.stringify(activeItems));
+      localStorage.setItem(PURCHASES_LAST_RENEWAL_DATE_KEY, today);
+    }
+
+    // Ensure basic fields without overwriting intentionally blank quantities
+    const normalized = activeItems.map((item) => ({
+      ...item,
+      fornecedor: item.fornecedor || 'Ceasa Box 14',
+      categoria: item.categoria || 'Frutas',
+      statusConferencia:
+        item.statusConferencia || (item.mercadoriaRecebida ? 'Entregue Completo' : 'Pendente'),
+    }));
+
+    return normalized;
   } catch {
     return INITIAL_PURCHASES;
   }
@@ -560,12 +667,18 @@ export const loadSettings = (): StoreSettings => {
       return INITIAL_SETTINGS;
     }
     const parsed = JSON.parse(raw);
+    let needsSave = false;
     // Automatically migrate previous default 07:00 to new standard 08:00
     if (parsed.horarioCheckinMatinal === '07:00') {
       parsed.horarioCheckinMatinal = '08:00';
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...INITIAL_SETTINGS, ...parsed }));
+      needsSave = true;
     }
-    return {
+    // Migrate proprietario to include Amanda alongside Beto
+    if (!parsed.proprietario || parsed.proprietario === 'Beto') {
+      parsed.proprietario = 'Beto & Amanda';
+      needsSave = true;
+    }
+    const merged: StoreSettings = {
       ...INITIAL_SETTINGS,
       ...parsed,
       alertasSonoros: {
@@ -573,6 +686,10 @@ export const loadSettings = (): StoreSettings => {
         ...(parsed.alertasSonoros || {}),
       },
     };
+    if (needsSave) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+    }
+    return merged;
   } catch {
     return INITIAL_SETTINGS;
   }

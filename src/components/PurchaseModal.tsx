@@ -68,9 +68,22 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   // Conference & Restocking fields (available during edit)
   const [mercadoriaRecebida, setMercadoriaRecebida] = useState(false);
   const [quantidadeRecebida, setQuantidadeRecebida] = useState('');
-  const [conferidoPorNome, setConferidoPorNome] = useState<'Lucas' | 'Rafael'>('Lucas');
+  const [unidadeConversao, setUnidadeConversao] = useState<'kg' | 'un'>('kg');
+  const [quantidadeConvertida, setQuantidadeConvertida] = useState('');
+  const [quantidadeAvaria, setQuantidadeAvaria] = useState('');
+  const [conferidoPorNome, setConferidoPorNome] = useState<string>('Lucas');
   const [reposicaoConcluida, setReposicaoConcluida] = useState(false);
   const [observacaoReposicao, setObservacaoReposicao] = useState('');
+
+  const sanitizeMeasureValue = (raw: string, unit: 'kg' | 'un'): string => {
+    if (unit === 'un') {
+      return raw.replace(/\D/g, '');
+    }
+    const normalized = raw.replace(/\./g, ',').replace(/[^0-9,]/g, '');
+    const parts = normalized.split(',');
+    if (parts.length <= 1) return parts[0];
+    return `${parts[0]},${parts.slice(1).join('').slice(0, 3)}`;
+  };
 
   useEffect(() => {
     if (itemToEdit) {
@@ -94,15 +107,16 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
       setMercadoriaRecebida(itemToEdit.mercadoriaRecebida || false);
       setQuantidadeRecebida(itemToEdit.quantidadeRecebida || '');
-      setConferidoPorNome(
-        itemToEdit.conferidoPorNome === 'Rafael' ? 'Rafael' : 'Lucas'
-      );
+      setUnidadeConversao(itemToEdit.unidadeConversao || 'kg');
+      setQuantidadeConvertida(itemToEdit.quantidadeConvertida || '');
+      setQuantidadeAvaria(itemToEdit.quantidadeAvaria || '');
+      setConferidoPorNome(itemToEdit.conferidoPorNome || 'Lucas');
       setReposicaoConcluida(itemToEdit.reposicaoConcluida || false);
       setObservacaoReposicao(itemToEdit.observacaoReposicao || '');
     } else {
       setProduto('');
       setData(getTodayDateString());
-      setQtdValor('10');
+      setQtdValor('1');
       setQtdUnidade('cx');
       setFornecedor('Ceasa Box 14');
       setCategoria('Frutas');
@@ -113,6 +127,9 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
       setObservacao('');
       setMercadoriaRecebida(false);
       setQuantidadeRecebida('');
+      setUnidadeConversao('kg');
+      setQuantidadeConvertida('');
+      setQuantidadeAvaria('');
       setConferidoPorNome('Lucas');
       setReposicaoConcluida(false);
       setObservacaoReposicao('');
@@ -126,7 +143,14 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
     if (!produto.trim()) return;
 
     const fullQtd = `${qtdValor.trim()} ${qtdUnidade.trim()}`.trim();
-    const isLucas = conferidoPorNome === 'Lucas';
+    const isLucas = !conferidoPorNome.includes('Rafael') || conferidoPorNome.includes('Lucas');
+    const cleanConv = mercadoriaRecebida
+      ? sanitizeMeasureValue(quantidadeConvertida, unidadeConversao)
+      : undefined;
+    const cleanAvaria =
+      mercadoriaRecebida && quantidadeAvaria.trim()
+        ? sanitizeMeasureValue(quantidadeAvaria, unidadeConversao)
+        : undefined;
 
     onSave({
       id: itemToEdit ? itemToEdit.id : `ITEM-${Date.now().toString(36).toUpperCase()}`,
@@ -142,6 +166,9 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
       quantidadeRecebida: mercadoriaRecebida
         ? quantidadeRecebida.trim() || fullQtd
         : undefined,
+      unidadeConversao: mercadoriaRecebida ? unidadeConversao : undefined,
+      quantidadeConvertida: cleanConv || undefined,
+      quantidadeAvaria: cleanAvaria || undefined,
       statusConferencia: mercadoriaRecebida
         ? (quantidadeRecebida.trim() && quantidadeRecebida.trim() !== fullQtd
             ? 'Entrega Parcial / Falta'
@@ -327,13 +354,43 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                 onChange={(e) => setCategoria(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="Frutas">Frutas</option>
-                <option value="Legumes">Legumes</option>
-                <option value="Verduras">Verduras</option>
-                <option value="Folhagens">Folhagens</option>
-                <option value="Produção / Grab & Go">Produção / Grab & Go</option>
-                <option value="Embalagens">Embalagens</option>
-                <option value="Outros">Outros</option>
+                {[
+                  'Hortifrúti',
+                  'Frutas',
+                  'Legumes',
+                  'Hortaliças',
+                  'Verduras',
+                  'Folhagens',
+                  'Temperos',
+                  'Bomboniere',
+                  'Produção / Grab & Go',
+                  'Embalagens',
+                  'Mercearia',
+                  'Laticínios',
+                  'Outros',
+                  ...(categoria &&
+                  ![
+                    'Hortifrúti',
+                    'Frutas',
+                    'Legumes',
+                    'Hortaliças',
+                    'Verduras',
+                    'Folhagens',
+                    'Temperos',
+                    'Bomboniere',
+                    'Produção / Grab & Go',
+                    'Embalagens',
+                    'Mercearia',
+                    'Laticínios',
+                    'Outros',
+                  ].includes(categoria)
+                    ? [categoria]
+                    : []),
+                ].map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -396,31 +453,112 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
               </div>
 
               {mercadoriaRecebida && (
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
-                  <div>
-                    <span className="text-[10px] text-slate-600 font-bold block mb-1">
-                      Qtd Recebida:
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Ex: 10 cx"
-                      value={quantidadeRecebida}
-                      onChange={(e) => setQuantidadeRecebida(e.target.value)}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs"
-                    />
+                <div className="space-y-2.5 pt-2 border-t border-slate-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">
+                        Qtd Volumes Recebida:
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Ex: 1 cx"
+                        value={quantidadeRecebida}
+                        onChange={(e) => setQuantidadeRecebida(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">
+                        Conferente:
+                      </span>
+                      <select
+                        value={conferidoPorNome}
+                        onChange={(e) => setConferidoPorNome(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="Lucas">Lucas</option>
+                        <option value="Rafael">Rafael</option>
+                        <option value="Charles + Lucas">Charles + Lucas</option>
+                        <option value="Charles + Rafael">Charles + Rafael</option>
+                        <option value="Amanda + Lucas">Amanda + Lucas</option>
+                        <option value="Amanda + Rafael">Amanda + Rafael</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-600 font-bold block mb-1">
-                      Conferente:
-                    </span>
-                    <select
-                      value={conferidoPorNome}
-                      onChange={(e) => setConferidoPorNome(e.target.value as any)}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
-                    >
-                      <option value="Lucas">Lucas</option>
-                      <option value="Rafael">Rafael</option>
-                    </select>
+
+                  {/* Conversão Obrigatória (kg ou un) + Avaria Opcional */}
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-800 uppercase">
+                        Unidade de Conversão (Obrigatória):
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnidadeConversao('kg');
+                            setQuantidadeConvertida((v) => sanitizeMeasureValue(v, 'kg'));
+                            setQuantidadeAvaria((v) => sanitizeMeasureValue(v, 'kg'));
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black cursor-pointer ${
+                            unidadeConversao === 'kg'
+                              ? 'bg-[#0a3821] text-white'
+                              : 'bg-white text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          ⚖️ kg (Fração)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnidadeConversao('un');
+                            setQuantidadeConvertida((v) => sanitizeMeasureValue(v.split(',')[0], 'un'));
+                            setQuantidadeAvaria((v) => sanitizeMeasureValue(v.split(',')[0], 'un'));
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black cursor-pointer ${
+                            unidadeConversao === 'un'
+                              ? 'bg-[#0a3821] text-white'
+                              : 'bg-white text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          🔢 un (Inteiro)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] font-black text-slate-800 block mb-1">
+                          Convertido em {unidadeConversao} *:
+                        </span>
+                        <input
+                          type="text"
+                          required={mercadoriaRecebida}
+                          inputMode={unidadeConversao === 'kg' ? 'decimal' : 'numeric'}
+                          placeholder={unidadeConversao === 'kg' ? 'Ex: 20,450' : 'Ex: 243'}
+                          value={quantidadeConvertida}
+                          onChange={(e) =>
+                            setQuantidadeConvertida(sanitizeMeasureValue(e.target.value, unidadeConversao))
+                          }
+                          className="w-full px-2 py-1.5 bg-white border border-emerald-600 rounded-lg text-xs font-mono font-black"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-rose-900 block mb-1">
+                          Avaria ({unidadeConversao} - Opcional):
+                        </span>
+                        <input
+                          type="text"
+                          inputMode={unidadeConversao === 'kg' ? 'decimal' : 'numeric'}
+                          placeholder={unidadeConversao === 'kg' ? 'Ex: 0,450' : 'Ex: 3'}
+                          value={quantidadeAvaria}
+                          onChange={(e) =>
+                            setQuantidadeAvaria(sanitizeMeasureValue(e.target.value, unidadeConversao))
+                          }
+                          className="w-full px-2 py-1.5 bg-white border border-rose-300 rounded-lg text-xs font-mono font-bold text-rose-900"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

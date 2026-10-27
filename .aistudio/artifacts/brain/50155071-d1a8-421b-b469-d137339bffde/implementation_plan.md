@@ -1,80 +1,78 @@
-# Plano de Implementação — Auditoria de Erros e Login Automático por Dispositivo
+# Correção da Extração da Lista Real de Compras & Paginação A4 na Impressão de Espelhos e Folha de Atividades
 
-## 1. Visão Geral do Objetivo
-Realizar uma correção abrangente de inconsistências técnicas identificadas em todo o projeto e implementar o **Vínculo Inteligente de Dispositivos por Perfil com Login Automático** para todos os usuários cadastrados no Beto da Fruta (**Administradores**: Charles, Amanda e Beto; **Operacionais**: Lucas, Rafael, Bianca, Adriana, Vanessa e Rita).
+Aprimoramento completo do motor de importação de listas de compras por texto livre (WhatsApp) para extrair 100% das quantidades coladas (`1cx`, `1sc`, `2cx`, `16Un`, `5`, `1 Bola`) e categorias automaticamente com edição livre, aliado à correção definitiva da impressão do **Espelho de Conferência de Mercadorias** e da **Folha de Atividades** para que listas longas fluam por múltiplas páginas A4 reais sem repetir nem cortar na 1ª página.
 
----
+## User Review & Critical Decisions
 
-## 2. Diagnóstico Completo do Projeto & Correções Planejadas
+> [!IMPORTANT]
+> Decisões confirmadas e escopo consolidado para execução:
 
-Durante a auditoria de ponta a ponta do código, foram identificados os seguintes problemas e pontos de melhoria que serão resolvidos:
-
-1. **Bloqueio de Diálogos Nativos (`window.confirm` / `window.alert`)**:
-   - **Problema**: Em `DailyRoutinesTab.tsx` (exclusão de rotinas manuais e restauração de turno) e `PurchaseList.tsx` / `Header.tsx`, o uso de `confirm()` nativo do navegador falha ou é bloqueado em ambientes WebView/iFrame e celulares.
-   - **Correção**: Substituir todos os `confirm()` por botões de confirmação visual em duas etapas ("Confirmar?" / "Cancelar") ou modais próprios integrados na interface.
-
-2. **Falta de Sincronização Automática entre "Rotinas Diárias" e "Quadro de Tarefas"**:
-   - **Problema**: Quando um colaborador marca uma atividade como concluída na aba **Rotinas Diárias** ou quando a gestão adiciona uma rotina manual, a aba **Quadro de Tarefas** só atualiza se alguém clicar manualmente no botão "Sincronizar c/ Quadro".
-   - **Correção**: Automatizar a sincronização bidirecional em `App.tsx` e `DailyRoutinesTab.tsx` para que qualquer alteração em rotinas diárias atualize imediatamente o Quadro de Tarefas e o Relatório WhatsApp.
-
-3. **Visibilidade de Tarefas Compartilhadas (Auxiliar) no Quadro de Tarefas**:
-   - **Problema**: Na aba **Rotinas Diárias**, o colaborador auxiliar (ex: **Bianca** no Expositor C com **Rafael**, ou em rotinas extras) já vê sua atividade. Porém, ao converter para o **Quadro de Tarefas** (`Task`), o objeto `Task` guarda apenas `responsavelId` (titular), ocultando a tarefa para o auxiliar naquela aba.
-   - **Correção**: Adicionar o campo `auxiliarId?: string` na interface `Task` (`src/types/index.ts`), propagá-lo no `syncRoutineWithTaskList` (`src/services/routineEngine.ts`) e atualizar o filtro em `src/components/TaskList.tsx` para exibir tarefas onde o colaborador logado seja titular **ou** auxiliar.
-
-4. **Isolamento de Troca de Perfil para Colaboradores Operacionais**:
-   - **Problema**: O cabeçalho (`Header.tsx`) permite que colaboradores operacionais abram o modal `UserSwitcherModal` e troquem livremente para o perfil de outro colega.
-   - **Correção**: Bloquear a troca livre de perfil para usuários operacionais (**Lucas, Rafael, Bianca, Adriana, Vanessa e Rita**). Apenas Administradores (**Charles, Amanda e Beto**) terão acesso ao painel de alternância rápida e gestão de perfis/dispositivos.
-
-5. **Persistência e Sincronização de Estado entre Dispositivos (`server.ts`)**:
-   - **Problema**: Os vínculos de dispositivos e atualizações de perfis ficavam restritos apenas ao `localStorage` isolado de cada navegador.
-   - **Correção**: Criar um servidor Express integrado com Vite (`server.ts`) com endpoints REST (`/api/state`, `/api/devices/bind`, `/api/devices/unbind`) e persistência em arquivo JSON no servidor, mantendo `localStorage` como cache rápido e garantindo que os aparelhos vinculados por cada colaborador fiquem visíveis para os administradores em tempo real.
+- **Decisão Confirmada 1 (Categorização Inteligente + Campo Editável)**: Para os itens sob `*Hortifruti:*`, o sistema identificará automaticamente se o item pertence a **Frutas** (ex: *Uva Vitória, Tangerina Importada, Maracujá 1ª, Pêra Foreli, Manga Tomy, Goiaba Verde, Laranja Pêra/Lima, Limão Taiti, Mamão Papaya/Formosa, Melancia, Banana Prata, Pinha, Atemoia*) ou **Legumes** (ex: *Tomate, Cebola, Batata Inglesa, Batata Doce Vitória, Beterraba, Tomate Cereja, Brócolis, Abóbora*), respeitando também todas as demais seções explícitas da lista (**Laticínios**, **Embalagens**, **Hortaliças**, **Bomboniere**, **Temperos**). Na tela de revisão, o campo de categoria permitirá escolher na lista ou digitar/editar livremente qualquer categoria.
+- **Decisão Confirmada 2 (Itens Sem Número na Lista)**: Produtos enviados sem quantidade na lista (ex: *Beterraba, Tomate Cereja, Brócolis, Abóbora, Banana Prata, Pinha, Atemoia, Manteiga Bezerra, Manteiga Giva, Álcool, Sabão em Pedra, itens de Bomboniere e Temperos*) permanecerão com a quantidade em branco (`Sem Quantidade`) para preenchimento posterior, sem inventar nem zerar valores.
+- **Decisão Confirmada 3 (Blindagem contra "Cx" no Nome do Produto)**: O extrator passa a priorizar a análise determinística linha a linha combinada com sanitização no cliente e no servidor, impedindo que `- 1cx Uva Vitória` vire `Cx Uva Vitória` sem quantidade.
+- **Decisão Confirmada 4 (Correção de Impressão Multi-Páginas sem Duplicação)**: Tanto o **Espelho de Conferência de Mercadoria** quanto a **Folha de Atividades** terão isolamento de impressão A4 real, eliminando a repetição da 1ª folha em 4 páginas e exibindo todos os itens (do item 1 até o último item da lista, com rodapé de assinatura ao final).
 
 ---
 
-## 3. Vínculo de Dispositivos por Perfil & Login Automático
+## 1. Overview & Core Concept
 
-### 3.1. Identificação Única do Aparelho e Registro no Perfil
-- **Identificador de Dispositivo (`DeviceId`)**:
-  - Cada aparelho/navegador receberá um identificador único persistente (`betodafruta_device_id`) salvo localmente, acompanhado de metadados legíveis do aparelho (ex: `"Android • Chrome"`, `"iPhone • Safari"`, `"Computador Windows • Edge"`), data/hora do vínculo e último acesso.
-- **Estrutura no Perfil do Usuário (`User`)**:
-  - Manter o campo existente `pinCode` em `User` (`src/types/index.ts`) para todos os usuários e adicionar `dispositivosVinculados?: RegisteredDevice[]` contendo `{ deviceId, nomeAparelho, plataforma, vinculadoEm, ultimoAcesso }`.
-- **Colaboradores Oficiais do Sistema e PINs Iniciais Padrão (Editáveis pela Gestão)**:
-  - **Administradores**:
-    - **Charles** (`USR-01` — Encarregado Geral): PIN `1234`
-    - **Amanda** (`USR-02` — Gestão de Reposição): PIN `1234`
-    - **Beto** (`USR-03` — Proprietário): PIN `1234`
-  - **Operacionais**:
-    - **Lucas** (`USR-04` — Reposição & Caixa): PIN `1004`
-    - **Rafael** (`USR-05` — Reposição & Caixa): PIN `1005`
-    - **Bianca** (`USR-06` — Operadora de Caixa & Reposição): PIN `1006`
-    - **Adriana** (`USR-07` — Produção / Grab & Go): PIN `1007`
-    - **Vanessa** (`USR-08` — Produção / Grab & Go): PIN `1008`
-    - **Rita** (`USR-09` — Limpeza & Auxílio Produção): PIN `1009`
-  - A gestão poderá visualizar e alterar o `pinCode` de qualquer colaborador no modal de Gestão de Equipe.
-
-### 3.2. Fluxo de Primeiro Acesso e Login Automático
-1. **Primeiro Acesso no Aparelho**:
-   - O usuário seleciona seu perfil na tela inicial (`LoginScreen.tsx`) e digita seu **PIN individual de 4 dígitos (`pinCode`)**.
-   - Ao autenticar com sucesso, o sistema **vincula automaticamente aquele dispositivo ao perfil do usuário** (salvando no perfil do usuário e no servidor) e exibe uma confirmação de aparelho vinculado.
-2. **Próximos Acessos (Login Automático para Todos os Usuários)**:
-   - Sempre que o aplicativo for aberto naquele dispositivo (seja por um Administrador — Charles, Amanda, Beto — ou por um Colaborador Operacional — Lucas, Rafael, Bianca, Adriana, Vanessa, Rita), o sistema verifica o `deviceId` atual.
-   - Encontrando o vínculo ativo no perfil do usuário, **entra diretamente e automaticamente na conta daquele usuário sem pedir o PIN novamente**, levando-o direto para suas atividades.
-   - Um indicador discreto no cabeçalho mostrará `"Aparelho Vinculado"` com o nome do colaborador.
-
-### 3.3. Gestão de Dispositivos Vinculados (Exclusivo para Administradores)
-- No modal **Gerenciar Colaboradores e Dispositivos** (`UserSwitcherModal.tsx` acessível pela Gestão):
-  - Exibirá a lista de aparelhos vinculados no perfil de cada colaborador (nome do aparelho, sistema operacional e data do último acesso).
-  - Permitirá ao administrador **remover/desvincular aparelhos** de um colaborador (caso o funcionário troque de celular) ou editar o PIN de 4 dígitos (`pinCode`) do colaborador.
-  - Caso o próprio usuário precise desconectar seu aparelho, o botão **"Desvincular Aparelho"** exigirá confirmação para liberar o dispositivo.
+- **O Que Faz**:
+  1. Transforma instantaneamente a lista real do WhatsApp em itens estruturados de compra com **Nome Limpo**, **Quantidade Extraída** (`1 cx`, `1 sc`, `2 cx`, `16 un`, `5 maços`, `1 bola`, `4 maços`), **Categoria Automática Editável** e **Zero Alucinação**.
+  2. Corrige o motor de impressão (`@media print`) para que o **Espelho de Compra/Conferência** e a **Folha de Atividades** imprimam todas as linhas da tabela em sequência (Página 1: itens 1–25, Página 2: itens 26–47 + assinaturas), sem repetir a primeira página nem cortar itens.
+- **Público-Alvo**: Gestão (Charles e Amanda) e equipe operacional (Lucas, Rafael e equipe de loja) no uso diário em tela e na prancheta física A4.
+- **Valor Principal**: Elimina retrabalho manual ao importar listas do WhatsApp e garante que as folhas impressas para o Ceasa e para a conferência na loja contenham 100% dos produtos sem desperdício de papel.
 
 ---
 
-## 4. Arquivos a Serem Criados ou Modificados
-- `src/types/index.ts` — Inclusão de `RegisteredDevice` e `dispositivosVinculados?: RegisteredDevice[]` em `User`, além de `auxiliarId?: string` em `Task`.
-- `src/services/deviceService.ts` *(Novo)* — Geração e leitura do `deviceId`, detecção amigável do modelo/sistema do aparelho (Android, iPhone, Desktop) e verificação de vínculo automático.
-- `server.ts` *(Novo)* e `package.json` — API backend para sincronizar usuários, dispositivos vinculados, tarefas, rotinas e compras entre os aparelhos da equipe.
-- `src/services/storage.ts` — Migração automática dos colaboradores oficiais (Charles, Amanda, Beto, Lucas, Rafael, Bianca, Adriana, Vanessa e Rita) com seus `pinCode` individuais, persistência dos dispositivos vinculados por perfil e sincronização com a API `/api/state`.
-- `src/components/LoginScreen.tsx` — Fluxo de autenticação com PIN de 4 dígitos para todos os usuários no primeiro vínculo e redirecionamento automático quando o dispositivo já estiver reconhecido.
-- `src/components/Header.tsx` — Ocultação da troca de perfil para colaboradores operacionais, indicador de dispositivo vinculado e substituição de `confirm()` nativo.
-- `src/components/UserSwitcherModal.tsx` — Painel para administradores gerenciarem colaboradores, `pinCode` individuais e lista de dispositivos vinculados por perfil (com opção de desvincular aparelhos).
-- `src/components/DailyRoutinesTab.tsx`, `src/components/TaskList.tsx`, `src/services/routineEngine.ts` e `src/App.tsx` — Sincronização automática em tempo real entre Rotinas Diárias e Quadro de Tarefas, suporte a `auxiliarId` no Quadro de Tarefas e remoção de todos os `confirm()` nativos.
+## 2. User Experience & Visual Design
+
+- **Fluxo 1 — Importação e Revisão da Lista Real do WhatsApp**:
+  - `- 1cx Uva Vitória` ➔ Produto: `Uva Vitória` | Qtd: `1 cx` | Categoria: `Frutas`
+  - `- 1cx Maracujá 1ª` ➔ Produto: `Maracujá 1ª` | Qtd: `1 cx` | Categoria: `Frutas`
+  - `- 1sc Batata Inglesa` ➔ Produto: `Batata Inglesa` | Qtd: `1 sc` | Categoria: `Legumes`
+  - `- 16Un Melancia` ➔ Produto: `Melancia` | Qtd: `16 un` | Categoria: `Frutas`
+  - `- MANTEIGA BEZERRA` (sob `*Laticínio:*`) ➔ Produto: `Manteiga Bezerra` | Qtd: `""` | Categoria: `Laticínios`
+  - `- Álcool` (sob `*Embalagens:*`) ➔ Produto: `Álcool` | Qtd: `""` | Categoria: `Embalagens`
+  - `- 1 Bola de Coentro` (sob `*Hortaliças:*`) ➔ Produto: `Coentro` | Qtd: `1 bola` | Categoria: `Hortaliças`
+  - `- Bokus 30g` (sob `*Bomboniere:*`) ➔ Produto: `Bokus 30g` | Qtd: `""` | Categoria: `Bomboniere`
+  - `- Edu Guedes` (sob `*Temperos:*`) ➔ Produto: `Edu Guedes` | Qtd: `""` | Categoria: `Temperos`
+  - **Categoria Editável**: Em cada linha revisada, o usuário pode selecionar uma categoria existente ou digitar/editar livremente o nome da categoria.
+
+- **Fluxo 2 — Impressão Multi-Página A4 (Espelho de Conferência & Folha de Atividades)**:
+  - Ao clicar em **Imprimir / Salvar PDF**, o conteúdo de fundo do painel é ocultado (`display: none !important` no conteúdo fora do modal de impressão) e o modal de impressão deixa de ser `position: fixed` com `max-height: 94vh` e `overflow-y: auto`, passando a ter fluxo estático natural (`position: static`, `height: auto`, `max-height: none`, `overflow: visible`).
+  - O cabeçalho da tabela (`<thead>`) repete-se automaticamente no topo de cada nova página A4 (`display: table-header-group`), enquanto os itens continuam do item 17 em diante até o final da lista, seguidos pelo bloco de assinaturas (Ceasa / Recepção Kombi / Reposição nas Bancas).
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Decisão 1: Causa Raiz e Solução para a Duplicação de 4 Páginas na Impressão**
+  - *Causa Identificada*: Os modais de impressão utilizam `fixed inset-0` e `max-h-[94vh] overflow-y-auto` sobre o painel principal. No navegador (Chromium/Edge/Chrome), elementos com `position: fixed` são carimbados repetidamente em todas as páginas geradas pela altura do painel de fundo (4 páginas), enquanto o `max-h-[94vh]` corta a tabela no item 16.
+  - *Abordagem Escolhida*: Durante `@media print`, ocultar o painel principal da aplicação quando o modal de impressão estiver aberto e converter toda a hierarquia do modal de impressão para fluxo de documento nativo (`position: static !important; max-height: none !important; overflow: visible !important; display: block !important;`), permitindo paginação A4 real do item 1 ao último item.
+- **Decisão 2: Extração Determinística Linha a Linha + Sanitização Dupla**
+  - *Abordagem Escolhida*: Separar quantidades coladas no início da linha (`1cx`, `1sc`, `2cx`, `16Un`, `5`, `1 Bola de`) preservando sufixos legítimos no final do nome do produto (`30g`, `45g`, `1ª`), tanto no servidor quanto no cliente.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│             1. Importação de Lista de Compras (WhatsApp)                │
+│  • Extrator Determinístico + Sanitizador (Cliente & Servidor)           │
+│  • Separa Qtd inicial ("1cx Uva" -> Qtd: "1 cx", Produto: "Uva")        │
+│  • Classifica Hortifruti em Frutas/Legumes + Campo Categoria Editável   │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│       2. Motor de Impressão A4 Multi-Páginas (Compras & Atividades)     │
+│  • Oculta o painel de fundo (.app-shell-content) no @media print        │
+│  • Remove position:fixed, max-h-[94vh] e overflow-y:auto no print       │
+│  • Paginação contínua (itens 1..N) + thead em cada página + Assinaturas │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Mapeamento de Componentes e Estado**:
+  - **Extrator e Modal de Revisão de Compras**: Sanitização automática de prefixos de unidade colados, preservação de itens sem quantidade em branco, e campo editável de categoria com sugestões rápidas (`datalist` / edição direta).
+  - **Modais de Impressão (Espelho de Conferência de Mercadoria & Folha de Atividades)**: Classes dedicadas de isolamento de impressão (`print-modal-root`, `print-modal-dialog`, `print-modal-body`) combinadas com regras `@media print` que desativam o corte de altura (`max-height: none`) e a repetição de camada fixa (`position: static`), garantindo impressão completa de todas as páginas.
